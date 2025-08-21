@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/widgets/home_widgets/home_header.dart';
-import 'package:frontend/widgets/home_widgets/items_recent.dart';
-import 'package:frontend/widgets/home_widgets/month_year_dropdown.dart';
-import 'package:frontend/widgets/home_widgets/most_category.dart';
-import 'package:frontend/widgets/home_widgets/summary_card.dart';
+import 'package:frontend/widgets/home_page_widgets/home_header.dart';
+import 'package:frontend/widgets/home_page_widgets/items_recent.dart';
+import 'package:frontend/widgets/home_page_widgets/month_year_dropdown.dart';
+import 'package:frontend/widgets/home_page_widgets/most_category.dart';
+import 'package:frontend/widgets/home_page_widgets/summary_card.dart';
 import 'package:google_fonts/google_fonts.dart';
 // import 'package:frontend/models/items_list.dart';
 

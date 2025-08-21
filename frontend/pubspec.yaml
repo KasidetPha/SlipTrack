@@ -38,6 +38,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   lucide_icons: ^0.257.0
   google_fonts: ^6.3.0
+  intl: ^0.18.1
 
 dev_dependencies:
   flutter_test:

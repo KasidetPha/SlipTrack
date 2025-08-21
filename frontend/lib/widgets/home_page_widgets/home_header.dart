@@ -16,7 +16,7 @@ class HomeHeader extends StatelessWidget {
               fontSize: 26,
               fontWeight: FontWeight.bold,
               color: Colors.white,
-              letterSpacing: 2
+              letterSpacing: 1
             ),
           )
 
