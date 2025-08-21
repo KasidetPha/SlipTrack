@@ -30,7 +30,7 @@ class HomeHeader extends StatelessWidget {
               borderRadius: BorderRadius.circular(25)
             ),
             child: IconButton(
-              icon: Image.asset("assets/images/icon_user.png", fit: BoxFit.contain, color: Colors.black.withOpacity(0.5),),
+              icon: Image.asset("assets/images/icons/icon_user.png", fit: BoxFit.contain, color: Colors.black.withOpacity(0.5),),
               // color: Colors.black.withOpacity(0.50),
               onPressed: () {
                 print("Profile button clicked");
