@@ -1,6 +1,10 @@
+// import 'dart:math';
+
+import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 
@@ -11,39 +15,49 @@ class AddBody extends StatefulWidget {
 }
 
 class _AddBodyState extends State<AddBody> {
-  TextEditingController _dateController = TextEditingController();
 
-  @override
-  void dispose() {
-    _dateController.dispose();
-    super.dispose();
-  }
-
+  final  ImagePicker _picker = ImagePicker();
   final now = DateTime.now();
-
-  List<String> categories = [
-    "Food & Drinks",
-    "Transport",
-    "Rent",
-    "Utilities",
-    "Debt / Credit",
-    "Insurance",
-    "Investment",
-    "Clothing",
-    "Health & Fitness",
-    "Beauty & Care",
-    "Travel & Leisure",
-    "Entertainment",
-    "Gifts & Donation",
-    "Emergency",
-    "Miscellaneous",
-    "Others"
-  ];
-
-  String? selectedCategory;
-
   final TextEditingController _controller = TextEditingController();
   final NumberFormat _formatter = NumberFormat('#,###');
+  TextEditingController _dateController = TextEditingController();
+
+  Future<void> _pickImage(ImageSource source) async {
+    final XFile? image = await _picker.pickImage(source: source);
+    if (image != null) {
+      print("Selected image path: ${image.path}");
+    }
+  }
+
+  void _showPickOptionDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text("Select Image", style: GoogleFonts.prompt()),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: Text("Camera", style: GoogleFonts.prompt(),),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: Text("Gallery", style: GoogleFonts.prompt(),),
+              onTap: () {
+                Navigator.pop(context);
+                _pickImage(ImageSource.gallery);
+              }
+            )
+          ],
+        )
+      )
+    );
+  }
 
   @override
   void initState() {
@@ -69,6 +83,33 @@ class _AddBodyState extends State<AddBody> {
   }
 
   @override
+  void dispose() {
+    _dateController.dispose();
+    super.dispose();
+  }
+
+  List<String> categories = [
+    "Food & Drinks",
+    "Transport",
+    "Rent",
+    "Utilities",
+    "Debt / Credit",
+    "Insurance",
+    "Investment",
+    "Clothing",
+    "Health & Fitness",
+    "Beauty & Care",
+    "Travel & Leisure",
+    "Entertainment",
+    "Gifts & Donation",
+    "Emergency",
+    "Miscellaneous",
+    "Others"
+  ];
+
+  String? selectedCategory;
+
+  @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -82,6 +123,43 @@ class _AddBodyState extends State<AddBody> {
               fontWeight: FontWeight.bold,
             ),
           ),
+
+          SizedBox(height: 12),
+
+          GestureDetector(
+            onTap: _showPickOptionDialog,
+            child: DottedBorder(
+              options: RoundedRectDottedBorderOptions(
+                radius: Radius.circular(12),
+                strokeWidth: 3,
+                dashPattern: [15,5],
+                padding: EdgeInsets.all(0),
+                color: Colors.grey,
+                
+              ),
+              child: Container(
+                width: double.infinity,
+                height: 180,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.black.withOpacity(0.1),
+                  border: Border.all(color: Colors.grey.withOpacity(0.2),)
+                ),
+                child: Center(
+                  child: Column(
+                    // crossAxisAlignment: CrossAxisAlignment.center,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.camera_alt_rounded, color: Colors.black.withOpacity(0.8),),
+                      Text("Tap to take photo", style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5), fontSize: 16, fontWeight: FontWeight.w500), ),
+                      Text("of your recript", style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5), fontSize: 16, fontWeight: FontWeight.w500), )
+                    ],
+                  ),
+                ),
+              ),
+            )
+          ),
+
           SizedBox(height: 12),
           Text("Amount", style: GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.bold)),
           SizedBox(height: 12),
@@ -110,11 +188,11 @@ class _AddBodyState extends State<AddBody> {
                 color: Colors.black.withOpacity(0.2),
               ),
               enabledBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.grey),
+                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
                 borderRadius: BorderRadius.circular(12),
               ),
               focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.grey),
+                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
@@ -129,19 +207,18 @@ class _AddBodyState extends State<AddBody> {
               filled: true,
               fillColor: Colors.white,
               enabledBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.grey),
+                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
                 borderRadius: BorderRadius.circular(12)
               ),
               focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.grey),
+                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
                 borderRadius: BorderRadius.circular(12)
               ),
             ),
           hint: Text(
             "Select a category",
             style: GoogleFonts.prompt(
-              fontWeight: FontWeight.w500,
-              color: Colors.black
+              color: Colors.black.withOpacity(0.5)
           ),
               
             ),
@@ -149,7 +226,7 @@ class _AddBodyState extends State<AddBody> {
             items: categories.map((category) {
               return DropdownMenuItem<String>(
                 value: category,
-                child: Text(category, style: GoogleFonts.prompt(fontWeight: FontWeight.w500),),
+                child: Text(category, style: GoogleFonts.prompt(),),
               );
             }).toList(),
             onChanged: (value) {
@@ -162,9 +239,7 @@ class _AddBodyState extends State<AddBody> {
           Text("Date", style: GoogleFonts.prompt(fontWeight: FontWeight.bold, fontSize: 18)),
           SizedBox(height: 12,),
           TextFormField(
-            style: TextStyle(
-              fontWeight: FontWeight.w500
-            ),
+            style: GoogleFonts.prompt(),
             controller: _dateController,
             readOnly: true,
             decoration: InputDecoration(
@@ -174,17 +249,17 @@ class _AddBodyState extends State<AddBody> {
               hintText: "Select a date",
               hintStyle: GoogleFonts.prompt(
                 color: Colors.black,
-                fontWeight: FontWeight.w500
+                
               ),
               enabledBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.grey),
+                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
                 borderRadius: BorderRadius.circular(12)
               ),
               focusedBorder: OutlineInputBorder(
-                borderSide: const BorderSide(color: Colors.grey),
+                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
                 borderRadius: BorderRadius.circular(12)
               ),
-              suffix: Icon(Icons.calendar_today),
+              suffix: Icon(Icons.calendar_today, ),
             ),
             onTap: () async {
               DateTime? pickedDate = await showDatePicker(
@@ -201,7 +276,44 @@ class _AddBodyState extends State<AddBody> {
                 });
               }
             },
-          )
+          ),
+
+          SizedBox(height: 12,),
+
+          Text("Notes", style: GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.bold),),
+          SizedBox(height: 12,),
+          TextFormField(
+            style: GoogleFonts.prompt(),
+            minLines: 4,
+            maxLines: 6,
+            decoration: InputDecoration(
+              filled: true,
+              fillColor: Colors.white,
+              enabledBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
+                borderRadius: BorderRadius.circular(12)
+              ),
+              hintText: "What did you spend money on?",
+              hintStyle: GoogleFonts.prompt(color: Colors.black.withOpacity(0.4))
+            ),
+          ),
+          SizedBox(height: 24,),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Colors.green[600],
+              minimumSize: Size(double.infinity, 56),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12)
+              )
+            ),
+            onPressed: () {print("Save active");},
+            child: Text("Save Expense", style: GoogleFonts.prompt(fontWeight: FontWeight.bold, fontSize: 16),),
+          ),
+          SizedBox(height: 24,),
         ],
       ),
     );
