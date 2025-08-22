@@ -33,7 +33,7 @@ class _AddBodyState extends State<AddBody> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text("Select Image", style: GoogleFonts.prompt()),
+        title: Text("Take photo", style: GoogleFonts.prompt()),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -42,7 +42,7 @@ class _AddBodyState extends State<AddBody> {
               title: Text("Camera", style: GoogleFonts.prompt(),),
               onTap: () {
                 Navigator.pop(context);
-                _pickImage(ImageSource.gallery);
+                _pickImage(ImageSource.camera);
               },
             ),
             ListTile(
@@ -84,6 +84,7 @@ class _AddBodyState extends State<AddBody> {
 
   @override
   void dispose() {
+    _controller.dispose();
     _dateController.dispose();
     super.dispose();
   }
@@ -152,7 +153,7 @@ class _AddBodyState extends State<AddBody> {
                     children: [
                       Icon(Icons.camera_alt_rounded, color: Colors.black.withOpacity(0.8),),
                       Text("Tap to take photo", style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5), fontSize: 16, fontWeight: FontWeight.w500), ),
-                      Text("of your recript", style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5), fontSize: 16, fontWeight: FontWeight.w500), )
+                      Text("of your receipt", style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5), fontSize: 16, fontWeight: FontWeight.w500), )
                     ],
                   ),
                 ),
