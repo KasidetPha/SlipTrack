@@ -120,7 +120,7 @@ class _AddBodyState extends State<AddBody> {
           Text(
             "Receipt Photo",
             style: GoogleFonts.prompt(
-              fontSize: 18,
+              fontSize: 20,
               fontWeight: FontWeight.bold,
             ),
           ),
@@ -162,7 +162,7 @@ class _AddBodyState extends State<AddBody> {
           ),
 
           SizedBox(height: 12),
-          Text("Amount", style: GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text("Amount", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.bold)),
           SizedBox(height: 12),
           TextFormField(
             style: GoogleFonts.prompt(
@@ -199,7 +199,7 @@ class _AddBodyState extends State<AddBody> {
             ),
           ),
           SizedBox(height: 12,),
-          Text("Category", style: GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.bold),),
+          Text("Category", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.bold),),
           SizedBox(height: 12,),
           DropdownButtonFormField<String>(
             isDense: true,
@@ -237,7 +237,7 @@ class _AddBodyState extends State<AddBody> {
             },
           ),
           SizedBox(height: 12,),
-          Text("Date", style: GoogleFonts.prompt(fontWeight: FontWeight.bold, fontSize: 18)),
+          Text("Date", style: GoogleFonts.prompt(fontWeight: FontWeight.bold, fontSize: 20)),
           SizedBox(height: 12,),
           TextFormField(
             style: GoogleFonts.prompt(),
@@ -281,7 +281,7 @@ class _AddBodyState extends State<AddBody> {
 
           SizedBox(height: 12,),
 
-          Text("Notes", style: GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.bold),),
+          Text("Notes", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.bold),),
           SizedBox(height: 12,),
           TextFormField(
             style: GoogleFonts.prompt(),
