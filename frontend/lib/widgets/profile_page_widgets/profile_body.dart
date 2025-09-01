@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/profile_page/edit_profile_page.dart';
+import 'package:frontend/widgets/profile_page_widgets/budget_setting.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class ProfileBody extends StatelessWidget {
@@ -15,6 +17,9 @@ class ProfileBody extends StatelessWidget {
           SizedBox(height: 24,),
           InkWell(
             onTap: () {
+              Navigator.push(context, MaterialPageRoute(
+                builder: (ctx) => EditProfilePage()
+              ));
               print("Edit Profile clicked");
             },
             child: Container(
@@ -54,6 +59,9 @@ class ProfileBody extends StatelessWidget {
           SizedBox(height: 12,),
           InkWell(
             onTap: () {
+              Navigator.push(context, MaterialPageRoute(
+                builder: (ctx) => BudgetSetting()
+              ));
               print("budget setting clicked");
             },
             child: Container(
@@ -91,16 +99,21 @@ class ProfileBody extends StatelessWidget {
             ),
           ),
           SizedBox(height: 24,),
+
           SizedBox(
             width: double.infinity,
             child: FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: Colors.red.shade50,
-                padding: EdgeInsets.all(16)
+                foregroundColor: Colors.red.shade600,
+                padding: const EdgeInsets.all(24),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)
+                )
               ),
-              onPressed: () {}, 
-              child: Text("Sign Out", style: GoogleFonts.prompt(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 20),)
-            )
+              onPressed: () {print("Sign out clicked");},
+              child: Text("Sign Out", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.bold),),
+            ),
           )
         ],
       ),

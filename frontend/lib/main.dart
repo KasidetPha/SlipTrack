@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/profile_page/budget_setting.dart';
+import 'package:frontend/pages/profile_page/edit_profile_page.dart';
 import 'widgets/bottom_nav_page.dart';
 
 void main() {
@@ -11,10 +13,14 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: "SlipTrack",
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(primarySwatch: Colors.deepPurple),
-      home: const BottomNavPage(),
+      title: 'SlipTrack',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+      ),
+      // home: const BottomNavPage(),
+      home: const BudgetSetting(),
+      // home: EditProfilePage()
     );
   }
 }

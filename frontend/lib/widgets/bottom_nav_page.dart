@@ -15,9 +15,10 @@ class _BottomNavPageState extends State<BottomNavPage> {
   int _currentIndex = 0;
 
   final List<Widget> _pages = const [
-    ProfilePage(),
     HomePage(),
     AddPage(),
+    ProfilePage(),
+    // EditProfilePage()
   ];
 
   void _onTap(int index) {
@@ -48,9 +49,10 @@ class _BottomNavPageState extends State<BottomNavPage> {
           selectedItemColor: Colors.blue,
           unselectedItemColor: Colors.grey,
           items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Profile'),
             BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
             BottomNavigationBarItem(icon: Icon(Icons.add_circle), label: 'Add'),
+            BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Profile'),
+            // BottomNavigationBarItem(icon: Icon(Icons.add_circle), label: 'Add'),
           ]
         ),
       ),
