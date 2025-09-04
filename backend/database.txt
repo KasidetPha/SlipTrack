@@ -1,0 +1,113 @@
+-- สร้างฐานข้อมูล
+CREATE DATABASE IF NOT EXISTS sliptrack;
+USE sliptrack;
+
+-- ตารางผู้ใช้
+CREATE TABLE users (
+    user_id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    email VARCHAR(100) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ตารางร้านค้า
+CREATE TABLE stores (
+    store_id INT AUTO_INCREMENT PRIMARY KEY,
+    store_name VARCHAR(150) NOT NULL,
+    address VARCHAR(255),
+    tax_id VARCHAR(50)
+);
+
+-- ตาราง Category
+CREATE TABLE categories (
+    category_id INT AUTO_INCREMENT PRIMARY KEY,
+    category_name VARCHAR(100) NOT NULL
+);
+
+-- ตารางใบเสร็จ
+CREATE TABLE receipts (
+    receipt_id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    store_id INT,
+    receipt_date DATE NOT NULL,
+    total_amount DECIMAL(10,2) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (store_id) REFERENCES stores(store_id)
+);
+
+-- ตารางรายการสินค้า/บริการ
+CREATE TABLE receipt_items (
+    item_id INT AUTO_INCREMENT PRIMARY KEY,
+    receipt_id INT NOT NULL,
+    category_id INT NOT NULL DEFAULT 5, -- Other
+    item_name VARCHAR(150) NOT NULL,
+    quantity INT NOT NULL,
+    unit_price DECIMAL(10,2) NOT NULL,
+    total_price DECIMAL(10,2) NOT NULL,
+    FOREIGN KEY (receipt_id) REFERENCES receipts(receipt_id),
+    FOREIGN KEY (category_id) REFERENCES categories(category_id)
+);
+
+-- -------------------------
+-- ข้อมูลตัวอย่าง
+-- -------------------------
+
+-- Users
+INSERT INTO users (name, email, password) VALUES
+('Somchai', 'somchai@example.com', '123456'),
+('Suda', 'suda@example.com', '123456'),
+('Anan', 'anan@example.com', '123456');
+
+-- Stores
+INSERT INTO stores (store_name, address, tax_id) VALUES
+('7-Eleven', 'Bangkok', 'TAX001'),
+('Tesco Lotus', 'Chiang Mai', 'TAX002'),
+('Big C', 'Khon Kaen', 'TAX003'),
+('FamilyMart', 'Phuket', 'TAX004');
+
+-- Categories
+INSERT INTO categories (category_name) VALUES
+('Food & Drink'),     -- 1
+('Stationery'),       -- 2
+('Household'),        -- 3
+('Personal Care'),    -- 4
+('Other');            -- 5
+
+-- Receipts
+INSERT INTO receipts (user_id, store_id, receipt_date, total_amount) VALUES
+(1, 1, '2025-09-01', 150.50),
+(1, 2, '2025-09-01', 320.00),
+(2, 3, '2025-09-02', 89.75),
+(2, 1, '2025-09-02', 45.00),
+(3, 4, '2025-09-03', 210.00),
+(1, 1, '2025-09-04', 99.00),
+(2, 2, '2025-09-04', 250.00),
+(3, 3, '2025-09-05', 560.00),
+(1, 4, '2025-09-05', 120.00),
+(2, 1, '2025-09-06', 75.00);
+
+-- Receipt Items
+INSERT INTO receipt_items (receipt_id, category_id, item_name, quantity, unit_price, total_price) VALUES
+(1, 1, 'Water Bottle', 2, 10.00, 20.00),
+(1, 1, 'Snack', 3, 15.00, 45.00),
+(1, 1, 'Instant Noodles', 5, 5.10, 25.50),
+(2, 1, 'Milk', 2, 25.00, 50.00),
+(2, 1, 'Bread', 1, 35.00, 35.00),
+(2, 1, 'Eggs (12 pack)', 1, 75.00, 75.00),
+(2, 1, 'Rice 5kg', 1, 160.00, 160.00),
+(3, 1, 'Soft Drink', 2, 20.00, 40.00),
+(3, 1, 'Chips', 1, 25.00, 25.00),
+(3, 1, 'Candy', 1, 24.75, 24.75),
+(4, 1, 'Sandwich', 1, 25.00, 25.00),
+(4, 1, 'Juice', 2, 10.00, 20.00),
+(5, 4, 'Shampoo', 1, 120.00, 120.00),
+(5, 4, 'Soap', 2, 30.00, 60.00),
+(5, 4, 'Toothpaste', 1, 30.00, 30.00),
+(6, 2, 'Notebook', 1, 45.00, 45.00),
+(6, 2, 'Pen', 2, 27.00, 54.00),
+(7, 1, 'Chicken', 2, 125.00, 250.00),
+(8, 5, 'TV Remote Battery', 2, 40.00, 80.00),
+(9, 1, 'Ice Cream', 3, 25.00, 75.00),
+(10, 5, 'Gift Card', 1, 75.00, 75.00);
