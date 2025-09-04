@@ -52,7 +52,6 @@ class _BottomNavPageState extends State<BottomNavPage> {
             BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
             BottomNavigationBarItem(icon: Icon(Icons.add_circle), label: 'Add'),
             BottomNavigationBarItem(icon: Icon(Icons.people), label: 'Profile'),
-            // BottomNavigationBarItem(icon: Icon(Icons.add_circle), label: 'Add'),
           ]
         ),
       ),

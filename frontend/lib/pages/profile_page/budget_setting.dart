@@ -15,6 +15,10 @@ class BudgetSetting extends StatefulWidget {
 class _BudgetSettingState extends State<BudgetSetting> {
   double _currentValue = 500;
 
+  bool isBudgetWaringOn = false;
+  bool isOverspendingAlertOn = false;
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -25,8 +29,8 @@ class _BudgetSettingState extends State<BudgetSetting> {
             children: [
               Container(
                 height: 150,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
                     colors: [
                       Color.fromARGB(255, 22, 163, 75),
                       Color.fromARGB(255, 13, 148, 134)
@@ -43,7 +47,7 @@ class _BudgetSettingState extends State<BudgetSetting> {
                     children: [
                       Align(
                         alignment: Alignment.centerLeft,
-                        child: GestureDetector(
+                        child: InkWell(
                           onTap: widget.onBack ?? () => Navigator.pop(context),
                           child: CircleAvatar(
                             backgroundColor: Colors.white.withOpacity(0.2),
@@ -65,13 +69,13 @@ class _BudgetSettingState extends State<BudgetSetting> {
                     SizedBox(height: 24,),
                     Container(
                       // alignment: Alignment.center,
-                      height: 120,
+                      height: 130,
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            offset: Offset(0, 0),
+                            offset: const Offset(0, 0),
                             color: Colors.black.withOpacity(0.05),
                             blurRadius: 2,
                             spreadRadius: 1
@@ -79,8 +83,9 @@ class _BudgetSettingState extends State<BudgetSetting> {
                         ]
                       ),
                       child: Padding(
-                        padding: EdgeInsets.all(24),
+                        padding: const EdgeInsets.symmetric(vertical: 24),
                         child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Row(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -88,14 +93,21 @@ class _BudgetSettingState extends State<BudgetSetting> {
                               children: [
                                 Row(
                                   children: [
-                                    Icon(Icons.local_dining, size: 24,),
-                                    SizedBox(width: 12,),
+                                    const SizedBox(width: 24,),
+                                    const Icon(Icons.local_dining, size: 24,),
+                                    const SizedBox(width: 12,),
                                     Text("Food & Dining", style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.w500),),
                                   ],
                                 ),
-                                Text("฿500.00", style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black.withOpacity(0.4)),)
+                                Row(
+                                  children: [
+                                    Text("฿500.00", style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.w500, color: Colors.black.withOpacity(0.4)),),
+                                    SizedBox(width: 24,)
+                                  ],
+                                ),
                               ],
                             ),
+                            SizedBox(height: 10,),
                             SliderTheme(
                               data: SliderTheme.of(context).copyWith(
                                 activeTrackColor: Colors.grey,
@@ -103,8 +115,7 @@ class _BudgetSettingState extends State<BudgetSetting> {
                                 thumbColor: Colors.blue,
                                 overlayColor: Colors.blue.withOpacity(0.2),
                                 valueIndicatorColor: Colors.white,
-                                // valueIndicatorStrokeColor: Colors.black
-                                valueIndicatorTextStyle: TextStyle(
+                                valueIndicatorTextStyle: const TextStyle(
                                   color: Colors.black,
                                   fontWeight: FontWeight.w300
                                 )
@@ -121,9 +132,93 @@ class _BudgetSettingState extends State<BudgetSetting> {
                                   });
                                 },
                               ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 24,),
+                    Text("Alert Settings", style: GoogleFonts.prompt(fontWeight: FontWeight.w500, fontSize: 20),),
+                    SizedBox(height: 24,),
+                    Container(
+                      height: 100,
+                      width: double.infinity,
+                      decoration:  BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            offset: const Offset(0, 0),
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 2,
+                            spreadRadius: 1
+                          )
+                        ]
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text("Budget Warnings",style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.w500),),
+                                Text("Alert When 80% of budget is reached", style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.6)),)
+                              ],
+                            ),
+                            IconButton(
+                              icon: Icon(isBudgetWaringOn ? Icons.toggle_on_rounded : Icons.toggle_off_rounded, size:40, color: isBudgetWaringOn ? Colors.green : Colors.grey),
+                              onPressed: () {
+                                setState(() {
+                                  isBudgetWaringOn = !isBudgetWaringOn;
+                                });
+                              },
                             )
                           ],
-                        )
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 12,),
+                                        Container(
+                      height: 100,
+                      width: double.infinity,
+                      decoration:  BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            offset: const Offset(0, 0),
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 2,
+                            spreadRadius: 1
+                          )
+                        ]
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text("Overspending Alerts",style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.w500),),
+                                Text("Alert when budget limit is exceded", style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.6)),)
+                              ],
+                            ),
+                            IconButton(
+                              icon: Icon(isOverspendingAlertOn ? Icons.toggle_on_rounded : Icons.toggle_off_rounded, size:40, color: isOverspendingAlertOn ? Colors.green : Colors.grey),
+                              onPressed: () {
+                                setState(() {
+                                  isOverspendingAlertOn = !isOverspendingAlertOn;
+                                });
+                              },
+                            )
+                          ],
+                        ),
                       ),
                     )
                   ]

@@ -18,8 +18,8 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      // home: const BottomNavPage(),
-      home: const BudgetSetting(),
+      home: const BottomNavPage(),
+      // home: const BudgetSetting(),
       // home: EditProfilePage()
     );
   }

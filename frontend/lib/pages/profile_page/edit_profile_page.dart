@@ -7,9 +7,28 @@ class EditProfilePage extends StatelessWidget {
 
   const EditProfilePage({super.key, this.onBack});
 
+  InputDecoration buildInputDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: GoogleFonts.prompt(color: Colors.grey[400]),
+      contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 24),
+      filled: true,
+      fillColor: Colors.grey[100],
+      enabledBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: Colors.grey.withOpacity(0.4)),
+        borderRadius: BorderRadius.circular(12)
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: BorderSide(color: Colors.grey.withOpacity(0.7)),
+        borderRadius: BorderRadius.circular(12)
+      )
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      // backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
           child: Column(
@@ -35,7 +54,7 @@ class EditProfilePage extends StatelessWidget {
                     children: [
                       Align(
                         alignment: Alignment.centerLeft,
-                        child: GestureDetector(
+                        child: InkWell(
                           onTap: onBack ?? () => Navigator.pop(context),
                           child: CircleAvatar(
                             backgroundColor: Colors.white.withOpacity(0.2),
@@ -51,32 +70,39 @@ class EditProfilePage extends StatelessWidget {
               SizedBox(height: 50,),
               Stack(
                 children: [
-                  CircleAvatar(
-                    radius: 50,
-                    backgroundColor: Colors.grey.withOpacity(0.1),
-                    backgroundImage: AssetImage('assets/images/icons/icon_user.png'),
+                  Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.2),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4)
+                        )
+                      ]
+                    ),
+                    child: CircleAvatar(
+                      radius: 55,
+                      backgroundColor: Colors.grey[200],
+                      backgroundImage: AssetImage('assets/images/profiles/profile_test.jpg'),
+                    ),
                   ),
                   Positioned(
                     bottom: 0,
                     right: 0,
-                    child: GestureDetector(
+                    child: InkWell(
                       onTap: () {
                         // TODO: ใส่ฟังก์ชันแก้ไขรูป
                       },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          // shape: BoxShape.circle,
-                          border: Border.all(color: Colors.black.withOpacity(0.5)),
-                          borderRadius: BorderRadius.circular(12),
-                          color: Colors.white,
-                        ),
-                        padding: const EdgeInsets.all(4),
+                      child: CircleAvatar(
+                        radius: 18,
+                        backgroundColor: Colors.white,
                         child: const Icon(
                           Icons.create_outlined,
                           color: Colors.black,
                           size: 20,
-                        ),
-                      ),
+                        )
+                      )
                     ),
                   ),
                 ],
@@ -103,17 +129,7 @@ class EditProfilePage extends StatelessWidget {
                     const SizedBox(height: 12),
                     TextField(
                       style: GoogleFonts.prompt(),
-                      decoration: InputDecoration(
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                        enabledBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Colors.black.withOpacity(0.5)),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.black.withOpacity(0.5)),
-                        ),
-                      ),
+                      decoration: buildInputDecoration("Enter your full name."),
                     ),
                 
                     const SizedBox(height: 24),
@@ -132,17 +148,7 @@ class EditProfilePage extends StatelessWidget {
                     TextField(
                       keyboardType: TextInputType.emailAddress,
                       style: GoogleFonts.prompt(),
-                      decoration: InputDecoration(
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                        enabledBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Colors.black.withOpacity(0.5)),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Colors.black.withOpacity(0.5)),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
+                      decoration: buildInputDecoration("Enter your email."),
                     ),
                 
                     const SizedBox(height: 24),
@@ -161,17 +167,7 @@ class EditProfilePage extends StatelessWidget {
                     TextField(
                       keyboardType: TextInputType.number,
                       style: GoogleFonts.prompt(),
-                      decoration: InputDecoration(
-                        contentPadding: EdgeInsets.symmetric(horizontal: 12),
-                        enabledBorder: OutlineInputBorder(
-                          borderSide: BorderSide(color: Colors.black.withOpacity(0.5)),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.black.withOpacity(0.5)),
-                        ),
-                      ),
+                      decoration: buildInputDecoration("Enter your Phone number"),
                     ),
 
                     SizedBox(height: 24,),
@@ -179,14 +175,13 @@ class EditProfilePage extends StatelessWidget {
                     FilledButton(
                       style: FilledButton.styleFrom(
                         backgroundColor: Color.fromARGB(255, 39, 98, 235),
-                        minimumSize: Size(double.infinity, 56),
+                        minimumSize: Size(double.infinity, 70),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadiusGeometry.circular(12)
                         )
                       ),
-                      onPressed: () {}, child: Text("Save Changes", style: GoogleFonts.prompt(fontWeight: FontWeight.bold, fontSize: 16),)
+                      onPressed: () {}, child: Text("Save Changes", style: GoogleFonts.prompt(fontWeight: FontWeight.bold, fontSize: 20, letterSpacing: 1),)
                     )
-
                   ],
                 ),
               ),

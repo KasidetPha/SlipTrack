@@ -19,25 +19,11 @@ class HomeHeader extends StatelessWidget {
               letterSpacing: 1
             ),
           )
-
         ),
-        SizedBox(
-          height: 50,
-          width: 50,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.5),
-              borderRadius: BorderRadius.circular(25)
-            ),
-            child: IconButton(
-              icon: Image.asset("assets/images/icons/icon_user.png", fit: BoxFit.contain, color: Colors.black.withOpacity(0.5),),
-              // color: Colors.black.withOpacity(0.50),
-              onPressed: () {
-                print("Profile button clicked");
-              },
-            ),
-          ),
-        ),
+        CircleAvatar(
+          radius: 30,
+          backgroundImage: AssetImage("assets/images/profiles/profile_test.jpg"),
+        )
       ]
     );
   }

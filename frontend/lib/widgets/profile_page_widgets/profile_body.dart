@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/pages/profile_page/edit_profile_page.dart';
-import 'package:frontend/widgets/profile_page_widgets/budget_setting.dart';
+// import 'package:frontend/widgets/profile_page_widgets/budget_setting.dart';
+import 'package:frontend/pages/profile_page/budget_setting.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class ProfileBody extends StatelessWidget {

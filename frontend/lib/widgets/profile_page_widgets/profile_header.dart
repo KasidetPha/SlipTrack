@@ -38,18 +38,11 @@ class ProfileHeader extends StatelessWidget {
           SizedBox(height: 24,),
           CircleAvatar(
             radius: 30,
-            backgroundColor: Colors.white.withOpacity(0.2),
-            child: ClipOval(
-              child: Image.asset(
-                "assets/images/icons/icon_user.png",
-                width: 30,
-                height: 30,
-              ),
-            )
+            backgroundImage: AssetImage('assets/images/profiles/profile_test.jpg')
           ),
           SizedBox(height: 24,),
-          Text("Kasidet Phasuk", style: GoogleFonts.prompt(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5),),
-          Text("kasidet@gmail.com", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
+          Text("Somsuk", style: GoogleFonts.prompt(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5),),
+          Text("Somsuk@example.com", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
 
         ],
       )
