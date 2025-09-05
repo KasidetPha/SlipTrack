@@ -43,6 +43,8 @@ app.use('/profile', profileRoute);
 app.use('/budget', budgetRoute);
 app.use('/auth', authRoute);
 
+
+
 // Start server
 app.listen(3000, () => {
   console.log("Server running on http://localhost:3000");

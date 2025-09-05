@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/login_page.dart';
 import 'package:frontend/pages/profile_page/budget_setting.dart';
 import 'package:frontend/pages/profile_page/edit_profile_page.dart';
 import 'widgets/bottom_nav_page.dart';
@@ -18,7 +19,8 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: const BottomNavPage(),
+      home: const LoginPage(),
+      // home: const BottomNavPage(),
       // home: const BudgetSetting(),
       // home: EditProfilePage()
     );
