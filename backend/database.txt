@@ -7,7 +7,7 @@ CREATE TABLE users (
     user_id INT AUTO_INCREMENT PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
-    password VARCHAR(255) NOT NULL,
+    password_hash VARCHAR(255) NOT NULL, -- เก็บ hash
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -54,11 +54,11 @@ CREATE TABLE receipt_items (
 -- ข้อมูลตัวอย่าง
 -- -------------------------
 
--- Users
-INSERT INTO users (name, email, password) VALUES
-('Somchai', 'somchai@example.com', '123456'),
-('Suda', 'suda@example.com', '123456'),
-('Anan', 'anan@example.com', '123456');
+-- Users (ใช้ SHA2 hash แทน plain text)
+INSERT INTO users (name, email, password_hash) VALUES
+('Somchai', 'somchai@example.com', SHA2('123456', 256)),
+('Suda', 'suda@example.com', SHA2('123456', 256)),
+('Anan', 'anan@example.com', SHA2('123456', 256));
 
 -- Stores
 INSERT INTO stores (store_name, address, tax_id) VALUES
