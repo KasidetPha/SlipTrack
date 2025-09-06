@@ -1,7 +1,10 @@
+import 'dart:convert';
 import 'dart:ui';
-
 import 'package:flutter/material.dart';
+import 'package:frontend/widgets/bottom_nav_page.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,6 +14,47 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
+  bool isLoading = false;
+
+  Future<void> login() async {
+    setState(() => isLoading = true);
+
+    final response = await http.post(
+      Uri.parse("http://localhost:3000/login"),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode({
+        "email": emailController.text,
+        "password": passwordController.text,
+      })
+    );
+
+    setState(() {
+      isLoading = false;
+    });
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final token = data["token"];
+
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString("token", token);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Login Success"))
+      );
+
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (ctx) => BottomNavPage()));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Login Failed: ${response.body}"))
+      );
+    }
+  }
+
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -74,6 +118,7 @@ class _LoginPageState extends State<LoginPage> {
                             Text("Email", style: GoogleFonts.prompt(fontSize: 18, color: Colors.white),),
                             SizedBox(height: 12,),
                             TextFormField(
+                              controller: emailController,
                               style: GoogleFonts.prompt(
                                 color: Colors.white,
                               ),
@@ -96,6 +141,7 @@ class _LoginPageState extends State<LoginPage> {
                             Text("Password", style: GoogleFonts.prompt(fontSize: 18, color: Colors.white),),
                             SizedBox(height: 12,),
                             TextFormField(
+                              controller: passwordController,
                               style: GoogleFonts.prompt(
                                 color: Colors.white,
                               ),
@@ -125,7 +171,7 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                                 minimumSize: Size(double.infinity, 0),
                               ),
-                              onPressed: () {}, 
+                              onPressed: login, 
                               child: Text("Sign In", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.bold))
                             ),
                             SizedBox(height: 12,),
