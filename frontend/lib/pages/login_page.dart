@@ -19,6 +19,27 @@ class _LoginPageState extends State<LoginPage> {
   final passwordController = TextEditingController();
   bool isLoading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    checkToken();
+  }
+
+  Future<void> checkToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token') ?? '';
+
+    if (token.isNotEmpty) {
+      if(!mounted) return;
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (ctx) => BottomNavPage())
+      );
+    }
+  }
+
+
   Future<void> login() async {
     setState(() => isLoading = true);
 
@@ -46,7 +67,10 @@ class _LoginPageState extends State<LoginPage> {
         SnackBar(content: Text("Login Success"))
       );
 
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (ctx) => BottomNavPage()));
+      Navigator.pushReplacement(
+        context, 
+        MaterialPageRoute(builder: (ctx) => BottomNavPage())
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("Login Failed: ${response.body}"))

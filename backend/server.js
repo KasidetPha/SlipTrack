@@ -1,8 +1,3 @@
-// เวลารัน รันใน Terminal "node server.js" *** รันด้วย node เวลาเซฟต้องรันยกเลิกแล้วรันใหม่
-// ให้ใช้ nodemon ต้องติดตั้งก่อน ถึงจะใช้ nodemon ได้ ติดตั้ง "npm install nodemon" เวลารันแล้วพิมพ์ใน Terminal "nodemon server.js" 
-// รัน nodemon เวลาเซฟแล้วจะไม่ต้องยกเลิกรันใหม่
-
-
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
@@ -18,64 +13,127 @@ app.use(express.json());
 const db = mysql.createPool({
   host: 'localhost',
   user: 'root',
-  password: '',
+  password: '', // ใส่รหัสผ่าน MySQL ของคุณ
   database: 'sliptrack',
   waitForConnections: true,
   connectionLimit: 10,
   queueLimit: 0
 });
 
-const SECRET = "sliptrackVersion1";
+const SECRET = "sliptrackVersion1"; // ใช้ในการสร้างและตรวจสอบ JWT
 
-// db.connect(err => {
-//   if (err) throw err;
-//   console.log("mysql connected!!");
-// });
+const getCurrentMonthYear = () => {
+  const now = new Date();
+  return {
+    month: now.getMonth() + 1,
+    year: now.getFullYear()
+  };
+}
 
-// login
+// Middleware ตรวจสอบ JWT
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1]; // แก้ไขจาก spilt -> split
+
+  if (!token) return res.status(401).json({ message: "No token provided" });
+
+  jwt.verify(token, SECRET, (err, user) => {
+    if (err) return res.status(403).json({ message: "Invalid or expired token" });
+
+    req.user = user; // จะได้ user.id และ user.email
+    next();
+  });
+}
+
+// Route: Login
 app.post("/login", async (req, res) => {
   try {
-    const {email, password} = req.body;
-    
-    const [rows] = await db.query("SELECT * FROM users WHERE email = ? AND password_hash = SHA2(?, 256)", [email, password]);
-  
+    const { email, password } = req.body;
+
+    // ดึงข้อมูลผู้ใช้
+    const [rows] = await db.query(
+      "SELECT * FROM users WHERE email = ?",
+      [email]
+    );
+
     if (rows.length === 0) {
-      return res.status(400).json({"Message": "User not found"});
+      return res.status(400).json({ message: "User not found" });
     }
 
     const user = rows[0];
 
+    // ตรวจสอบ password ถ้าใช้ bcrypt
     // const validPassword = await bcrypt.compare(password, user.password_hash);
-    // if (!validPassword) {
-    //   return res.status(401).json({message: "Invalid Password"});
-    // }
+    // if (!validPassword) return res.status(401).json({ message: "Invalid password" });
 
-    const token = jwt.sign({id: user.user_id, email: user.email}, SECRET, {expiresIn: "1h"});
+    // ถ้าใช้ SHA2 ใน DB
+    const [checkPass] = await db.query(
+      "SELECT * FROM users WHERE email = ? AND password_hash = SHA2(?, 256)",
+      [email, password]
+    );
+    if (checkPass.length === 0) return res.status(401).json({ message: "Invalid password" });
 
-    res.json({message: "Login Success", token});
+    // สร้าง JWT
+    const token = jwt.sign({ id: user.user_id, email: user.email }, SECRET, { expiresIn: "1h" });
+
+    res.json({ message: "Login success", token });
   } catch (err) {
     console.error(err);
-    res.status(500).json({message: "Server error"});
+    res.status(500).json({ message: "Server error" });
   }
-})
-
-app.get('/receipt_item', async (req, res) => {
-  const [rows] = await db.query("SELECT * FROM receipt_items");
-  res.json(rows);
 });
 
-// import route
-const route = require('./route');
-const profileRoute = require('./routes/profileRoute');
-const budgetRoute = require('./routes/budgetRoute');
-const authRoute = require('./routes/authRoute');
+app.get('/receipt_item/categories', authenticateToken, async (req,res) => {
+  try {
+    const userId = req.user.id;
+    const month = req.query.month ? parseInt(req.query.month) : (new Date().getMonth() + 1);
+    const year = req.query.year ? parseInt(req.query.year) : (new Date().getFullYear());
+    const [rows] = await db.query(`
+      SELECT 
+        categories.category_name,
+        SUM(receipt_items.total_price) AS total_spent
+      FROM receipt_items
+      LEFT JOIN categories ON categories.category_id = receipt_items.category_id
+      LEFT JOIN receipts ON receipts.receipt_id = receipt_items.receipt_id
+      WHERE receipts.user_id = ?
+        AND EXTRACT(MONTH FROM receipts.receipt_date) = ?
+        AND EXTRACT(YEAR FROM receipts.receipt_date) = ?
+      GROUP BY categories.category_name
+      ORDER BY total_spent DESC
+      LIMIT 2;
+      `, [userId, month, year])
+    console.log(rows);
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({message: err.message});
+  }
+});
 
-// ใช้งาน route
-app.use('/', route);
-app.use('/profile', profileRoute);
-app.use('/budget', budgetRoute);
-app.use('/auth', authRoute);
+// Route: ดึงข้อมูล receipt ของผู้ใช้
+app.get('/receipt_item', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id; // เอา user id จาก token
+    const month = req.query.month ? parseInt(req.query.month) : (new Date().getMonth() + 1);
+    const year = req.query.year ? parseInt(req.query.year) : (new Date().getFullYear());
+    const [rows] = await db.query(`
+      SELECT users.name, receipts.total_amount, receipt_items.item_name, receipts.receipt_date
+      FROM receipts 
+      LEFT JOIN users ON users.user_id = receipts.user_id
+      LEFT JOIN receipt_items ON receipts.receipt_id = receipt_items.receipt_id
+      WHERE receipts.user_id = ?
+        AND EXTRACT(MONTH FROM receipts.receipt_date) = ?
+        AND EXTRACT(YEAR FROM receipts.receipt_date) = ?
+      ORDER BY receipts.receipt_date DESC;
+    `, [userId, month, year]);
 
+    console.log("year:", year)
+    console.log("month:", month)
+
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
 
 // Start server
 app.listen(3000, () => {

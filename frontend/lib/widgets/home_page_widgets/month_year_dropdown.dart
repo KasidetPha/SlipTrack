@@ -1,5 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MonthYearDropdown extends StatefulWidget {
   const MonthYearDropdown({super.key});
@@ -37,6 +41,60 @@ class _MonthYearDropdownState extends State<MonthYearDropdown> {
     final now = DateTime.now();
     selectedMonth = months[now.month - 1];
     selectedYear = now.year;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      fetchReceipts();
+    });
+  }
+
+  int getMonthNumber(String monthName) {
+    return months.indexOf(monthName) + 1;
+  }
+
+  Future<void> fetchReceipts() async {
+    if (selectedMonth == null || selectedYear == null) return;
+
+    final monthNumber = getMonthNumber(selectedMonth!);
+    final url = Uri.parse(
+      'http://localhost:3000/receipt_item?month=$monthNumber&year=$selectedYear'
+    );
+
+    print("Fetching receipts for $monthNumber/$selectedYear");
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+      final response = await http.get(url, headers: {
+        'Authorization' : 'Bearer ${token}'
+      });
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        print(data);
+      } else {
+        print("error: ${response.statusCode}");
+      }
+    } catch (err) {
+      print("Exception: $err");
+    }
+  }
+
+  void updateMonth(String? value) {
+    if (value == null || value == selectedMonth) return;
+    setState(() {
+      selectedMonth = value;
+    });
+
+    fetchReceipts();
+  }
+
+  void updateYear(int? value) {
+    if (value == null || value == selectedYear) return;
+    setState(() {
+      selectedYear = value;
+    });
+
+    fetchReceipts();
   }
 
   @override
@@ -66,11 +124,7 @@ class _MonthYearDropdownState extends State<MonthYearDropdown> {
                 child: Text(month, style: GoogleFonts.prompt()),
               );
             }).toList(),
-            onChanged: (value) {
-              setState(() {
-                selectedMonth = value;
-              });
-            },
+            onChanged: updateMonth,
           )
         ),
         SizedBox(width: 16,),
@@ -97,11 +151,7 @@ class _MonthYearDropdownState extends State<MonthYearDropdown> {
                 child: Text(year.toString(), style: GoogleFonts.prompt(),)
               );
             }).toList(),
-            onChanged: (value) {
-              setState(() {
-                selectedYear = value;
-              });
-            },
+            onChanged: updateYear,
           ),
         )
       ],

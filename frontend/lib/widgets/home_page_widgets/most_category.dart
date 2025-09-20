@@ -1,60 +1,120 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-// import 'package:frontend/models/items_list.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
-class MostCategory extends StatelessWidget {
+class MostCategory extends StatefulWidget {
   const MostCategory({super.key});
 
   @override
+  State<MostCategory> createState() => _MostCategoryState();
+}
+
+class _MostCategoryState extends State<MostCategory> {
+  List<Map<String, dynamic>> categories = [];
+
+  @override
+  void initState() {
+    super.initState();
+    fetchCategories();
+  }
+
+  Future<void> fetchCategories() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token') ?? '';
+
+    if (token.isEmpty) return;
+
+    final response = await http.get(
+      Uri.parse('http://localhost:3000/receipt_item/categories'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+
+    if (response.statusCode == 200) {
+      final List<dynamic> data = json.decode(response.body);
+      setState(() {
+        categories = data.map((e) {
+          return {
+            "category_name": e["category_name"],
+            "total_spent": double.tryParse(e['total_spent'].toString()) ?? 0.0
+          };
+        }).toList();
+      });
+    } else {
+      print("Error fetching categories: ${response.body}");
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (categories.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final topOne = categories.length > 0 ? categories[0] : null;
+    final topTwo = categories.length > 1 ? categories[1] : null;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
-        child: Row(
+      child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Expanded(
-            child: Container(
-              height: 140,
-              padding: EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 240, 253, 244),
-                borderRadius: BorderRadius.circular(12)
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  Image.asset("assets/images/icons/icon_food.png", width: 30, height: 30,),
-                  SizedBox(height: 10,),
-                  Text("Food & Dining", style: GoogleFonts.prompt(fontSize: 16, color: Colors.black, fontWeight: FontWeight.normal)),
-                  Text("456.20.-", style: GoogleFonts.prompt(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold))
-                ],
-              ),
-            ),
-          ),
-          SizedBox(width: 16,),
-          Expanded(
-            child: Container(
-              height: 140,
-              padding: EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                color: const Color.fromARGB(255, 239, 246, 255),
-                borderRadius: BorderRadius.circular(12)
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  Image.asset("assets/images/icons/icon_transport.png", width: 30, height: 30,),
-                  SizedBox(height: 10,),
-                  Text("Transportation", style: GoogleFonts.prompt(fontSize: 16, color: Colors.black, fontWeight: FontWeight.normal)),
-                  Text("234.80.-", style: GoogleFonts.prompt(fontSize: 18, color: Colors.blue[600], fontWeight: FontWeight.bold))
-                ],
+          if (topOne != null)
+            Expanded(
+              child: Container(
+                height: 140,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Image.asset("assets/images/icons/icon_food.png", width: 30, height: 30),
+                    Text(
+                      topOne['category_name'],
+                      style: GoogleFonts.prompt(fontSize: 16, color: Colors.black),
+                    ),
+                    Text(
+                      "${(topOne['total_spent'] ?? 0.0).toStringAsFixed(2)}.-",
+                      style: GoogleFonts.prompt(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
               ),
             ),
-          )
+          const SizedBox(width: 16),
+          if (topTwo != null)
+            Expanded(
+              child: Container(
+                height: 140,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    Image.asset("assets/images/icons/icon_transport.png", width: 30, height: 30),
+                    Text(
+                      topTwo['category_name'],
+                      style: GoogleFonts.prompt(fontSize: 16, color: Colors.black),
+                    ),
+                    Text(
+                      "${(topTwo['total_spent'] ?? 0.0).toStringAsFixed(2)}.-",
+                      style: GoogleFonts.prompt(fontSize: 18, color: Colors.blue, fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
-      )
+      ),
     );
   }
 }

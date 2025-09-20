@@ -1,4 +1,18 @@
 const express = require('express');
+
+
+// import route
+const route = require('./route');
+const profileRoute = require('./routes/profileRoute');
+const budgetRoute = require('./routes/budgetRoute');
+const authRoute = require('./routes/authRoute');
+
+// ใช้งาน route
+app.use('/', route);
+app.use('/profile', profileRoute);
+app.use('/budget', budgetRoute);
+app.use('/auth', authRoute);
+
 const router = express.Router();
 
 // หน้าแรก
