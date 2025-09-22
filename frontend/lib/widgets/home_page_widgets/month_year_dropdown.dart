@@ -6,7 +6,9 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MonthYearDropdown extends StatefulWidget {
-  const MonthYearDropdown({super.key});
+  final Function(int month, int year)? onMonthYearChanged;
+  
+  const MonthYearDropdown({super.key, this.onMonthYearChanged});
 
   @override
   State<MonthYearDropdown> createState() => _MonthYearDropdownState();
@@ -42,40 +44,22 @@ class _MonthYearDropdownState extends State<MonthYearDropdown> {
     selectedMonth = months[now.month - 1];
     selectedYear = now.year;
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      fetchReceipts();
-    });
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   fetchReceipts();
+    // });
   }
 
   int getMonthNumber(String monthName) {
     return months.indexOf(monthName) + 1;
   }
 
-  Future<void> fetchReceipts() async {
-    if (selectedMonth == null || selectedYear == null) return;
+  void notifyParent() {
+    if (selectedMonth != null && selectedYear != null) {
+      final monthNumber = getMonthNumber(selectedMonth!);
 
-    final monthNumber = getMonthNumber(selectedMonth!);
-    final url = Uri.parse(
-      'http://localhost:3000/receipt_item?month=$monthNumber&year=$selectedYear'
-    );
-
-    print("Fetching receipts for $monthNumber/$selectedYear");
-
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token') ?? '';
-      final response = await http.get(url, headers: {
-        'Authorization' : 'Bearer ${token}'
-      });
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        print(data);
-      } else {
-        print("error: ${response.statusCode}");
+      if (widget.onMonthYearChanged != null) {
+        widget.onMonthYearChanged!(monthNumber, selectedYear!);
       }
-    } catch (err) {
-      print("Exception: $err");
     }
   }
 
@@ -84,8 +68,8 @@ class _MonthYearDropdownState extends State<MonthYearDropdown> {
     setState(() {
       selectedMonth = value;
     });
-
-    fetchReceipts();
+    
+    notifyParent();
   }
 
   void updateYear(int? value) {
@@ -94,7 +78,7 @@ class _MonthYearDropdownState extends State<MonthYearDropdown> {
       selectedYear = value;
     });
 
-    fetchReceipts();
+    notifyParent();
   }
 
   @override

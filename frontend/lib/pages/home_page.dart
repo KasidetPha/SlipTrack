@@ -7,8 +7,27 @@ import 'package:frontend/widgets/home_page_widgets/summary_card.dart';
 import 'package:google_fonts/google_fonts.dart';
 // import 'package:frontend/models/items_list.dart';
 
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({super.key});
+
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+
+  int selectedMonth = DateTime.now().month;
+  int selectedYear = DateTime.now().year;
+  Key itemsRecentKey = UniqueKey(); // ใช้เพื่อ force rebuild ItemsRecent
+
+  void onMonthYearChanged(int month, int year) {
+    setState(() {
+      selectedMonth = month;
+      selectedYear = year;
+      itemsRecentKey = UniqueKey(); // สร้าง key ใหม่เพื่อ force rebuild
+    });
+  }
+
 
   @override
   Widget build(BuildContext context) {
@@ -42,11 +61,13 @@ class HomePage extends StatelessWidget {
                   )
                 ],
               ),
-              child: const Column(
+              child: Column(
                 children: [
                   HomeHeader(),
                   SizedBox(height: 24),
-                  MonthYearDropdown(),
+                  MonthYearDropdown(
+                    onMonthYearChanged: onMonthYearChanged,
+                  ),
                   SizedBox(height: 24),
                   SummaryCard(),
                 ],
@@ -55,7 +76,7 @@ class HomePage extends StatelessWidget {
 
             const SizedBox(height: 24),
 
-            const MostCategory(),
+            MostCategory(),
 
             // const SizedBox(height: 24),
 
@@ -66,7 +87,11 @@ class HomePage extends StatelessWidget {
 
             // const SizedBox(height: 24),
 
-            const ItemsRecent()
+            ItemsRecent(
+              key: itemsRecentKey,
+              selectedMonth: selectedMonth,
+              selectedYear: selectedYear,
+            )
           ],
         ),
       ),

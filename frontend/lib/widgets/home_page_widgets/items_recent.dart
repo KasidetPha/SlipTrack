@@ -8,7 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:frontend/pages/login_page.dart';
 
 class ItemsRecent extends StatefulWidget {
-  const ItemsRecent({super.key});
+  final int selectedMonth;
+  final int selectedYear;
+  const ItemsRecent({super.key,
+    required this.selectedMonth,
+    required this.selectedYear
+  });
 
   @override
   State<ItemsRecent> createState() => _ItemsRecentState();
@@ -17,16 +22,16 @@ class ItemsRecent extends StatefulWidget {
 // แก้ ReceiptItem model ให้รองรับ total_amount เป็น String
 class ReceiptItem {
   final String item_name;
-  final double total_price;
+  final double total_amount;
   final DateTime receipt_date;
 
-  ReceiptItem({required this.item_name, required this.total_price, required this.receipt_date});
+  ReceiptItem({required this.item_name, required this.total_amount, required this.receipt_date});
 
   factory ReceiptItem.fromJson(Map<String, dynamic> json) {
     // final parsedDate = DateTime.tryParse(json['receipt_date'] ?? '');
     return ReceiptItem(
       item_name: json['item_name'] ?? '',
-      total_price: double.tryParse(json['total_amount'].toString()) ?? 0.0,
+      total_amount: double.tryParse(json['total_amount'].toString()) ?? 0.0,
       receipt_date: DateTime.tryParse(json['receipt_date'] ?? '')?.toLocal() ?? DateTime.now()
     );
   }
@@ -37,8 +42,21 @@ class _ItemsRecentState extends State<ItemsRecent> {
 
   @override
   void initState() {
+    // TODO: implement initState
     super.initState();
     _futureItems = fetchReceiptItems();
+  }
+
+  @override
+  void didUpdateWidget(ItemsRecent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    print("didUpdateWidget called - old: ${oldWidget.selectedMonth}/${oldWidget.selectedYear}, new ${widget.selectedMonth}/${widget.selectedYear}");
+    if(oldWidget.selectedMonth != widget.selectedMonth || oldWidget.selectedYear != widget.selectedYear) {
+      print("refreshing data for ${widget.selectedMonth}/${widget.selectedYear}");
+      setState(() {
+        _futureItems = fetchReceiptItems();
+      });
+    }
   }
 
   Future<void> logoutAndRedirect() async {
@@ -61,12 +79,16 @@ class _ItemsRecentState extends State<ItemsRecent> {
       return [];
     }
 
-    final response = await http.get(
+    final response = await http.post(
       Uri.parse('http://localhost:3000/receipt_item'),
       headers: {
         'Authorization': 'Bearer $token',
         'Content-Type': 'application/json',
       },
+      body: json.encode({
+        'month': widget.selectedMonth,
+        'year': widget.selectedYear,
+      })
     );
 
     if (response.statusCode == 200) {
@@ -134,7 +156,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
                             ],
                           ),
                           Text(
-                            "${item.total_price.toStringAsFixed(2)}.-",
+                            "${item.total_amount.toStringAsFixed(2)}.-",
                             style: GoogleFonts.prompt(
                               color: Colors.red,
                               fontWeight: FontWeight.bold,

@@ -33,7 +33,7 @@ const getCurrentMonthYear = () => {
 // Middleware ตรวจสอบ JWT
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // แก้ไขจาก spilt -> split
+  const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) return res.status(401).json({ message: "No token provided" });
 
@@ -110,11 +110,15 @@ app.get('/receipt_item/categories', authenticateToken, async (req,res) => {
 });
 
 // Route: ดึงข้อมูล receipt ของผู้ใช้
-app.get('/receipt_item', authenticateToken, async (req, res) => {
+app.post('/receipt_item', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id; // เอา user id จาก token
-    const month = req.query.month ? parseInt(req.query.month) : (new Date().getMonth() + 1);
-    const year = req.query.year ? parseInt(req.query.year) : (new Date().getFullYear());
+    // const month = req.query.month ? parseInt(req.query.month) : (new Date().getMonth() + 1);
+    // const year = req.query.year ? parseInt(req.query.year) : (new Date().getFullYear());
+
+    const {month, year} = req.body;
+    const finalMonth = month || (new Date().getMonth() + 1);
+    const finalYear = year || (new Date().getYear());
     const [rows] = await db.query(`
       SELECT users.name, receipts.total_amount, receipt_items.item_name, receipts.receipt_date
       FROM receipts 
@@ -124,10 +128,11 @@ app.get('/receipt_item', authenticateToken, async (req, res) => {
         AND EXTRACT(MONTH FROM receipts.receipt_date) = ?
         AND EXTRACT(YEAR FROM receipts.receipt_date) = ?
       ORDER BY receipts.receipt_date DESC;
-    `, [userId, month, year]);
+    `, [userId, finalMonth, finalYear]);
 
-    console.log("year:", year)
-    console.log("month:", month)
+    console.log("month:", finalMonth)
+    console.log("year:", finalYear)
+    console.log("row:", rows)
 
     res.json(rows);
   } catch (err) {
