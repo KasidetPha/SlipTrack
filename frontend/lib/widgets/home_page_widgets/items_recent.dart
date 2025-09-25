@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/models/receipt_item.dart';
+// import 'package:frontend/models/receipt_item.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -24,15 +24,17 @@ class ReceiptItem {
   final String item_name;
   final double total_amount;
   final DateTime receipt_date;
+  final int quantity;
 
-  ReceiptItem({required this.item_name, required this.total_amount, required this.receipt_date});
+  ReceiptItem({required this.item_name, required this.total_amount, required this.receipt_date, required this.quantity});
 
   factory ReceiptItem.fromJson(Map<String, dynamic> json) {
     // final parsedDate = DateTime.tryParse(json['receipt_date'] ?? '');
     return ReceiptItem(
       item_name: json['item_name'] ?? '',
       total_amount: double.tryParse(json['total_amount'].toString()) ?? 0.0,
-      receipt_date: DateTime.tryParse(json['receipt_date'] ?? '')?.toLocal() ?? DateTime.now()
+      receipt_date: DateTime.tryParse(json['receipt_date'] ?? '')?.toLocal() ?? DateTime.now(),
+      quantity: json['quantity'] ?? ''
     );
   }
 }
@@ -149,7 +151,12 @@ class _ItemsRecentState extends State<ItemsRecent> {
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text("${item.item_name}", style: GoogleFonts.prompt(fontWeight: FontWeight.bold),),
+                                  Row(
+                                    children: [
+                                      Text("${item.item_name} ", style: GoogleFonts.prompt(fontWeight: FontWeight.bold),),
+                                      Text("x${item.quantity}", style: GoogleFonts.prompt(fontWeight: FontWeight.w500, color: Colors.grey),),
+                                    ],
+                                  ),
                                   Text(DateFormat('dd-MM-yyyy').format(item.receipt_date), style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5)),)
                                 ]
                               ),

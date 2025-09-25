@@ -69,7 +69,10 @@ class _HomePageState extends State<HomePage> {
                     onMonthYearChanged: onMonthYearChanged,
                   ),
                   SizedBox(height: 24),
-                  SummaryCard(),
+                  SummaryCard(
+                    selectedMonth: selectedMonth, 
+                    selectedYear: selectedYear,
+                  ),
                 ],
               ),
             ),
