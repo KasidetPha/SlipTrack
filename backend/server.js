@@ -75,11 +75,21 @@ app.post("/login", async (req, res) => {
   }
 });
 
-app.get('/receipt_item/categories', authenticateToken, async (req,res) => {
+app.post('/receipt_item/categories', authenticateToken, async (req,res) => {
   try {
     const userId = req.user.id;
-    const month = req.query.month ? parseInt(req.query.month) : (new Date().getMonth() + 1);
-    const year = req.query.year ? parseInt(req.query.year) : (new Date().getFullYear());
+    const now = new Date();
+    const {month, year} = req.body;
+    const finalMonth = month || (new Date().getMonth() + 1);
+    const finalYear = year || (new Date().getFullYear());
+
+    let prevMonth = finalMonth - 1;
+    let prevYear = finalYear;
+    if (prevMonth === 0) {
+      prevMonth = 12;
+      prevYear -= 1;
+    }
+
     const [rows] = await db.query(`
       SELECT 
         categories.category_name,
@@ -95,6 +105,7 @@ app.get('/receipt_item/categories', authenticateToken, async (req,res) => {
       LIMIT 2;
       `, [userId, month, year])
     console.log(rows);
+    console.log(userId, finalMonth, finalYear);
     res.json(rows);
   } catch (err) {
     res.status(500).json({message: err.message});
@@ -156,7 +167,7 @@ app.post('/receipt_item', authenticateToken, async (req, res) => {
     const finalYear = year || (new Date().getYear());
     const [rows] = await db.query(`
       SELECT
-        u.full_name, r.total_amount, ri.item_name, r.receipt_date, ri.quantity
+        u.full_name, ri.total_price, ri.item_name, r.receipt_date, ri.quantity
       FROM receipts r
       LEFT JOIN users u ON u.user_id = r.user_id
       LEFT JOIN receipt_items ri ON ri.receipt_id = r.receipt_id

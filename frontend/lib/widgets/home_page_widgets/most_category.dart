@@ -2,17 +2,23 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MostCategory extends StatefulWidget {
-  const MostCategory({super.key});
+  final int selectedMonth;
+  final int selectedYear;
+  const MostCategory({super.key, required this.selectedMonth, required this.selectedYear});
 
   @override
   State<MostCategory> createState() => _MostCategoryState();
 }
 
 class _MostCategoryState extends State<MostCategory> {
+  final curencyTh = NumberFormat.currency(locale: 'th_TH', symbol: '฿');
   List<Map<String, dynamic>> categories = [];
+  bool _loading = false;
+  String ? _error;
 
   @override
   void initState() {
@@ -20,99 +26,164 @@ class _MostCategoryState extends State<MostCategory> {
     fetchCategories();
   }
 
+  @override
+  void didUpdateWidget(covariant MostCategory oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedMonth != widget.selectedMonth ||
+        oldWidget.selectedYear != widget.selectedYear) {
+          fetchCategories();
+    }
+  }
+
   Future<void> fetchCategories() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token') ?? '';
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
 
-    if (token.isEmpty) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
 
-    final response = await http.get(
-      Uri.parse('http://localhost:3000/receipt_item/categories'),
-      headers: {'Authorization': 'Bearer $token'},
-    );
+      if (token.isEmpty) {
+        throw Exception('Token is empty');
+      }
 
-    if (response.statusCode == 200) {
+      final response = await http.post(
+        Uri.parse('http://localhost:3000/receipt_item/categories'),
+        headers: {
+          'Authorization': 'Barrer $token',
+          'Content-type': 'application/json'
+        },
+        body: json.encode({
+          'month': widget.selectedMonth,
+          'year': widget.selectedYear
+        })
+      );
+
+      if (response.statusCode != 200) {
+        throw Exception("HTTP ${response.statusCode}: ${response.body}");
+      }
+
       final List<dynamic> data = json.decode(response.body);
+      final list = data.map((e) {
+        return {
+          'category_name': (e['category_name'] ?? '').toString(),
+          'total_spent': double.tryParse((e['total_spent'] ?? '0').toString())
+        };
+      }).toList()..sort((a,b) => (b['total_spent'] as double).compareTo(a['total_spent'] as double));
+
+      if (!mounted) return;
       setState(() {
-        categories = data.map((e) {
-          return {
-            "category_name": e["category_name"],
-            "total_spent": double.tryParse(e['total_spent'].toString()) ?? 0.0
-          };
-        }).toList();
+        categories = list;
+        _loading = false;
       });
-    } else {
-      print("Error fetching categories: ${response.body}");
+    } catch (err) {
+      if (!mounted) return;
+      setState(() {
+      _error = err.toString();
+      _loading = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (categories.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return const SizedBox(height: 140, child: Center(child: CircularProgressIndicator(),),);
     }
 
-    final topOne = categories.length > 0 ? categories[0] : null;
+    if (_error != null) {
+      return SizedBox(
+        height: 140,
+        child: Center(
+          child: Text("Error: $_error", style: GoogleFonts.prompt(color: Colors.red),),
+        ),
+      );
+    }
+
+    if (categories.isEmpty) {
+      return SizedBox(
+        height: 140,
+        child: Center(
+          child: Text('ยังไม่มีข้อมูลในเดือนนี้', style: GoogleFonts.prompt(),),
+        ),
+      );
+    }
+
+    final topOne = categories.isNotEmpty ? categories[0] : null;
     final topTwo = categories.length > 1 ? categories[1] : null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          if (topOne != null)
-            Expanded(
-              child: Container(
-                height: 140,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Image.asset("assets/images/icons/icon_food.png", width: 30, height: 30),
-                    Text(
-                      topOne['category_name'],
-                      style: GoogleFonts.prompt(fontSize: 16, color: Colors.black),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              if (topOne != null)
+                Expanded(
+                  child: Container(
+                    height: 140,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    Text(
-                      "${(topOne['total_spent'] ?? 0.0).toStringAsFixed(2)}.-",
-                      style: GoogleFonts.prompt(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Image.asset("assets/images/icons/icon_food.png", width: 30, height: 30),
+                        Text(
+                          topOne['category_name'],
+                          style: GoogleFonts.prompt(fontSize: 16, color: Colors.black),
+                        ),
+                        Text(
+                          curencyTh.format(topOne['total_spent'] ?? 0.0),
+                          style: GoogleFonts.prompt(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
-          const SizedBox(width: 16),
-          if (topTwo != null)
-            Expanded(
-              child: Container(
-                height: 140,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    Image.asset("assets/images/icons/icon_transport.png", width: 30, height: 30),
-                    Text(
-                      topTwo['category_name'],
-                      style: GoogleFonts.prompt(fontSize: 16, color: Colors.black),
+              const SizedBox(width: 16),
+              if (topTwo != null)
+                Expanded(
+                  child: Container(
+                    height: 140,
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Colors.blue.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
                     ),
-                    Text(
-                      "${(topTwo['total_spent'] ?? 0.0).toStringAsFixed(2)}.-",
-                      style: GoogleFonts.prompt(fontSize: 18, color: Colors.blue, fontWeight: FontWeight.bold),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Image.asset("assets/images/icons/icon_transport.png", width: 30, height: 30),
+                        Text(
+                          topTwo['category_name'],
+                          style: GoogleFonts.prompt(fontSize: 16, color: Colors.black),
+                        ),
+                        Text(
+                          curencyTh.format(topTwo['total_spent'] ?? 0.0),
+                          style: GoogleFonts.prompt(fontSize: 18, color: Colors.blue, fontWeight: FontWeight.bold),
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
+            ],
+          ),
+          // SizedBox(height: 8,),
+          // TextButton.icon(
+          //   style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), iconAlignment: IconAlignment.end),
+          //   onPressed: () {}, 
+          //   label: Text("See All", style: GoogleFonts.prompt(color: Colors.blueAccent),),
+          //   icon: const Icon(Icons.chevron_right_rounded),
+          // ),
         ],
       ),
     );

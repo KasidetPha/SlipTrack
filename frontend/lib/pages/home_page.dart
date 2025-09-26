@@ -79,7 +79,25 @@ class _HomePageState extends State<HomePage> {
 
             const SizedBox(height: 24),
 
-            MostCategory(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24,0,24,24),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Spending by Categories", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.bold )),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(iconAlignment: IconAlignment.end),
+                    onPressed: () {},
+                    label: Text("See All", style: GoogleFonts.prompt(color: Colors.grey,),),
+                    icon: Icon(Icons.chevron_right_outlined, color: Colors.grey, size: 18,),
+                  )
+                ],
+              ),
+            ),
+            MostCategory(
+              selectedMonth: selectedMonth, 
+              selectedYear: selectedYear,
+            ),
 
             // const SizedBox(height: 24),
 

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class SummaryCard extends StatefulWidget {
@@ -19,6 +20,8 @@ class SummaryCard extends StatefulWidget {
 }
 
 class _SummaryCardState extends State<SummaryCard> {
+
+  final currencyTh = NumberFormat.currency(locale: 'th_TH', symbol: '฿');
 
   Future<Map<String, dynamic>> fetchTotalAmount() async {
     final prefs = await SharedPreferences.getInstance();
@@ -80,9 +83,12 @@ class _SummaryCardState extends State<SummaryCard> {
         final thisMonth = double.tryParse(data['thisMonth']?.toString() ?? '0') ?? 0.0;
         final percentChange = double.tryParse(data['percentChange']?.toString() ?? '0') ?? 0.0;
 
-        final isIncrease = percentChange >= 0;
-        final arrowIcon = isIncrease ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
-        final arrowColor = isIncrease ? Colors.redAccent : Colors.greenAccent;
+        final isIncrease = percentChange > 0;
+        final isIncreaseZero = percentChange == 0;
+        // final arrowIcon = isIncrease ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
+        final arrowIcon = isIncreaseZero ? Icons.remove_rounded : isIncrease ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded;
+        // final arrowColor = isIncrease ? Colors.redAccent : Colors.greenAccent;
+        final arrowColor = isIncreaseZero ? Colors.grey : isIncrease ? Colors.redAccent : Colors.greenAccent;
 
         final percentText = isIncrease ? "${percentChange.toStringAsFixed(2)}%" :"${percentChange.abs().toStringAsFixed(2)}%";
 
@@ -108,12 +114,12 @@ class _SummaryCardState extends State<SummaryCard> {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               Text("Total Expenses This Month", style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 15, color: Colors.white.withOpacity(0.8)),)),
-              Text("${thisMonth.toStringAsFixed(2)}", style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold),)),
+              Text(currencyTh.format(thisMonth), style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold),)),
               Row(
               children: [
                   Icon(arrowIcon, color: arrowColor,),
                   SizedBox(width: 5,),
-                  Text("${percentText} from last month", style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 15, color: Colors.white.withOpacity(0.8)),)),
+                  Text("${percentText} From Last Month", style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 15, color: Colors.white.withOpacity(0.8)),)),
                 ],
               )
             ],

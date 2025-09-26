@@ -19,20 +19,20 @@ class ItemsRecent extends StatefulWidget {
   State<ItemsRecent> createState() => _ItemsRecentState();
 }
 
-// แก้ ReceiptItem model ให้รองรับ total_amount เป็น String
+// แก้ ReceiptItem model ให้รองรับ total_price เป็น String
 class ReceiptItem {
   final String item_name;
-  final double total_amount;
+  final double total_price;
   final DateTime receipt_date;
   final int quantity;
 
-  ReceiptItem({required this.item_name, required this.total_amount, required this.receipt_date, required this.quantity});
+  ReceiptItem({required this.item_name, required this.total_price, required this.receipt_date, required this.quantity});
 
   factory ReceiptItem.fromJson(Map<String, dynamic> json) {
     // final parsedDate = DateTime.tryParse(json['receipt_date'] ?? '');
     return ReceiptItem(
       item_name: json['item_name'] ?? '',
-      total_amount: double.tryParse(json['total_amount'].toString()) ?? 0.0,
+      total_price: double.tryParse(json['total_price'].toString()) ?? 0.0,
       receipt_date: DateTime.tryParse(json['receipt_date'] ?? '')?.toLocal() ?? DateTime.now(),
       quantity: json['quantity'] ?? ''
     );
@@ -41,6 +41,7 @@ class ReceiptItem {
 
 class _ItemsRecentState extends State<ItemsRecent> {
   late Future<List<ReceiptItem>> _futureItems;
+    final currencyTh = NumberFormat.currency(locale: 'th_TH', symbol: '฿');
 
   @override
   void initState() {
@@ -123,7 +124,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
           child: Column(
             children: items.map((item) =>
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+                padding: const EdgeInsets.fromLTRB(24,0,24,12),
                 child: Container(
                   width: double.infinity,
                   height: 78,
@@ -157,13 +158,13 @@ class _ItemsRecentState extends State<ItemsRecent> {
                                       Text("x${item.quantity}", style: GoogleFonts.prompt(fontWeight: FontWeight.w500, color: Colors.grey),),
                                     ],
                                   ),
-                                  Text(DateFormat('dd-MM-yyyy').format(item.receipt_date), style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5)),)
+                                  Text(DateFormat('dd/MM/yyyy').format(item.receipt_date), style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5)),)
                                 ]
                               ),
                             ],
                           ),
                           Text(
-                            "${item.total_amount.toStringAsFixed(2)}.-",
+                            currencyTh.format(item.total_price),
                             style: GoogleFonts.prompt(
                               color: Colors.red,
                               fontWeight: FontWeight.bold,
@@ -176,7 +177,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
                   ),
                 ),
               )
-            ).toList(),
+            ).toList()
           ),
         );
       }
