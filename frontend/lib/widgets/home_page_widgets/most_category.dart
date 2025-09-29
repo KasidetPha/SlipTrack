@@ -8,7 +8,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 class MostCategory extends StatefulWidget {
   final int selectedMonth;
   final int selectedYear;
-  const MostCategory({super.key, required this.selectedMonth, required this.selectedYear});
+  final ValueChanged<bool>? onHasDataChanged;
+  const MostCategory({
+    super.key, 
+    required this.selectedMonth, 
+    required this.selectedYear, 
+    this.onHasDataChanged
+  });
 
   @override
   State<MostCategory> createState() => _MostCategoryState();
@@ -23,6 +29,7 @@ class _MostCategoryState extends State<MostCategory> {
   @override
   void initState() {
     super.initState();
+    _notifyHasData(false);
     fetchCategories();
   }
 
@@ -30,9 +37,25 @@ class _MostCategoryState extends State<MostCategory> {
   void didUpdateWidget(covariant MostCategory oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.selectedMonth != widget.selectedMonth ||
-        oldWidget.selectedYear != widget.selectedYear) {
-          fetchCategories();
+    oldWidget.selectedYear != widget.selectedYear) {
+      _notifyHasData(false);
+      fetchCategories();
     }
+  }
+
+  void _notifyHasData(bool hasData) {
+    if (widget.onHasDataChanged != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        widget.onHasDataChanged!(hasData);
+      });
+    }
+  }
+  
+  double _parseDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString().replaceAll(',', '')) ?? 0.0;
   }
 
   Future<void> fetchCategories() async {
@@ -52,8 +75,8 @@ class _MostCategoryState extends State<MostCategory> {
       final response = await http.post(
         Uri.parse('http://localhost:3000/receipt_item/categories'),
         headers: {
-          'Authorization': 'Barrer $token',
-          'Content-type': 'application/json'
+          'Authorization': 'Bearer $token',
+          'Content-Type': 'application/json'
         },
         body: json.encode({
           'month': widget.selectedMonth,
@@ -69,7 +92,7 @@ class _MostCategoryState extends State<MostCategory> {
       final list = data.map((e) {
         return {
           'category_name': (e['category_name'] ?? '').toString(),
-          'total_spent': double.tryParse((e['total_spent'] ?? '0').toString())
+          'total_spent': _parseDouble(e['total_spent'])
         };
       }).toList()..sort((a,b) => (b['total_spent'] as double).compareTo(a['total_spent'] as double));
 
@@ -78,12 +101,16 @@ class _MostCategoryState extends State<MostCategory> {
         categories = list;
         _loading = false;
       });
+      if (mounted) {
+        _notifyHasData(categories.isNotEmpty);
+      }
     } catch (err) {
       if (!mounted) return;
       setState(() {
       _error = err.toString();
       _loading = false;
       });
+      _notifyHasData(false);
     }
   }
 
@@ -124,55 +151,23 @@ class _MostCategoryState extends State<MostCategory> {
             children: [
               if (topOne != null)
                 Expanded(
-                  child: Container(
-                    height: 140,
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.green.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Image.asset("assets/images/icons/icon_food.png", width: 30, height: 30),
-                        Text(
-                          topOne['category_name'],
-                          style: GoogleFonts.prompt(fontSize: 16, color: Colors.black),
-                        ),
-                        Text(
-                          curencyTh.format(topOne['total_spent'] ?? 0.0),
-                          style: GoogleFonts.prompt(fontSize: 18, color: Colors.green, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
+                  child: _CategoryCard(
+                    color: Colors.green.withOpacity(0.1),
+                    amountStyle: GoogleFonts.prompt(fontSize: 18, color:Colors.green, fontWeight: FontWeight.bold),
+                    iconPath: "assets/images/icons/icon_food.png",
+                    name: topOne['category_name'],
+                    amountText: curencyTh.format(topOne['total_spent'] ?? 0.0),
                   ),
                 ),
               const SizedBox(width: 16),
               if (topTwo != null)
                 Expanded(
-                  child: Container(
-                    height: 140,
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        Image.asset("assets/images/icons/icon_transport.png", width: 30, height: 30),
-                        Text(
-                          topTwo['category_name'],
-                          style: GoogleFonts.prompt(fontSize: 16, color: Colors.black),
-                        ),
-                        Text(
-                          curencyTh.format(topTwo['total_spent'] ?? 0.0),
-                          style: GoogleFonts.prompt(fontSize: 18, color: Colors.blue, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
+                  child: _CategoryCard(
+                    color: Colors.blue.withOpacity(0.1),
+                    amountStyle: GoogleFonts.prompt(fontSize: 18, color:Colors.blue, fontWeight: FontWeight.bold),
+                    iconPath: "assets/images/icons/icon_food.png",
+                    name: topTwo['category_name'],
+                    amountText: curencyTh.format(topTwo['total_spent'] ?? 0.0),
                   ),
                 ),
             ],
@@ -184,6 +179,42 @@ class _MostCategoryState extends State<MostCategory> {
           //   label: Text("See All", style: GoogleFonts.prompt(color: Colors.blueAccent),),
           //   icon: const Icon(Icons.chevron_right_rounded),
           // ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryCard extends StatelessWidget {
+  final Color color;
+  final TextStyle amountStyle;
+  final String iconPath;
+  final String name;
+  final String amountText;
+  
+  const _CategoryCard({
+    required this.color,
+    required this.amountStyle,
+    required this.iconPath,
+    required this.name,
+    required this.amountText,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 140,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: color, 
+        borderRadius: BorderRadius.circular(12)
+      ), child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+        children: [
+          Image.asset(iconPath, width: 30, height: 30,),
+          Text(name, style: GoogleFonts.prompt(fontSize: 16, color: Colors.black),),
+          Text(amountText, style: amountStyle)
         ],
       ),
     );

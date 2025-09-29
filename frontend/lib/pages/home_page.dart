@@ -19,12 +19,14 @@ class _HomePageState extends State<HomePage> {
   int selectedMonth = DateTime.now().month;
   int selectedYear = DateTime.now().year;
   Key itemsRecentKey = UniqueKey(); // ใช้เพื่อ force rebuild ItemsRecent
+  bool _hasCategoryData = false;
 
   void onMonthYearChanged(int month, int year) {
     setState(() {
       selectedMonth = month;
       selectedYear = year;
       itemsRecentKey = UniqueKey(); // สร้าง key ใหม่เพื่อ force rebuild
+      _hasCategoryData = false;
     });
   }
 
@@ -85,18 +87,22 @@ class _HomePageState extends State<HomePage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text("Spending by Categories", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.bold )),
-                  TextButton.icon(
-                    style: TextButton.styleFrom(iconAlignment: IconAlignment.end),
-                    onPressed: () {},
-                    label: Text("See All", style: GoogleFonts.prompt(color: Colors.grey,),),
-                    icon: Icon(Icons.chevron_right_outlined, color: Colors.grey, size: 18,),
-                  )
+                  if (_hasCategoryData) 
+                    TextButton.icon(
+                      style: TextButton.styleFrom(iconAlignment: IconAlignment.end),
+                      onPressed: () {},
+                      label: Text("See All", style: GoogleFonts.prompt(color: Colors.grey,),),
+                      icon: Icon(Icons.chevron_right_outlined, color: Colors.grey, size: 18,),
+                    )
                 ],
               ),
             ),
             MostCategory(
               selectedMonth: selectedMonth, 
               selectedYear: selectedYear,
+              onHasDataChanged: (hasData) {
+                setState(() => _hasCategoryData = hasData);
+              },
             ),
 
             // const SizedBox(height: 24),

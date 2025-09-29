@@ -1,21 +1,20 @@
 class ReceiptItem {
-  final int item_id;
-  final int receipt_id;
   final String item_name;
-  final int quantity;
-  final double unit_price;
   final double total_price;
+  final DateTime receiptDate;
+  final int quantity;
 
-  ReceiptItem({required this.item_id, required this.receipt_id, required this.item_name, required this.quantity, required this.unit_price, required this.total_price});
+  ReceiptItem({required this.item_name, required this.total_price, required this.receiptDate, required this.quantity,});
 
-  factory ReceiptItem.fromJson(Map<String, dynamic>json) {
+  factory ReceiptItem.fromJson(Map<String, dynamic>j) {
+    double _d(v) => v is num ? v.toDouble() : double.tryParse('${v}'.replaceAll(",", '')) ?? 0.0;
+    int _i(v) => v is num ? v.toInt() : int.tryParse('${v}'.replaceAll(',', '')) ?? 0;
+    DateTime _dt(v) => DateTime.tryParse('${v}')?.toLocal() ?? DateTime.now();
     return ReceiptItem(
-      item_id: json['item_id'], 
-      receipt_id: json['receipt_id'], 
-      item_name: json['item_name'], 
-      quantity: json['quantity'], 
-      unit_price: double.parse(json['unit_price'].toString()), 
-      total_price: double.parse(json['total_price'].toString())
+      item_name: j['item_name']?.toString() ?? '', 
+      total_price: _d(j['total_price']),
+      receiptDate: _dt(j['receipt_date']),
+      quantity: _i(j['quantity']), 
     );
   }
 }

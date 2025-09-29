@@ -112,50 +112,74 @@ app.post('/receipt_item/categories', authenticateToken, async (req,res) => {
   }
 });
 
-app.post('/getMonthlyExpensesComparison', authenticateToken, async (req, res) => {
+// app.post('/getMonthlyExpensesComparison', authenticateToken, async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+//     const now = new Date();
+//     const {month, year} = req.body;
+//     const finalMonth = month || (new Date().getMonth() + 1);
+//     const finalYear = year || (new Date().getFullYear());
+
+//     let prevMonth = finalMonth - 1;
+//     let prevYear = finalYear;
+//     if (prevMonth === 0) {
+//       prevMonth = 12;
+//       prevYear -= 1;
+//     }
+
+//     const [thisMonthRows] = await db.query(`
+//       SELECT SUM(total_amount) as total_amount FROM receipts
+//       WHERE user_id = ? AND EXTRACT(MONTH FROM receipt_date) = ? AND EXTRACT(YEAR FROM receipt_date) = ?;
+//     `, [userId, finalMonth, finalYear])
+//     const [lastMonthRows] = await db.query(`
+//       SELECT SUM(total_amount) as total_amount FROM receipts
+//       WHERE user_id = ? AND EXTRACT(MONTH FROM receipt_date) = ? AND EXTRACT(YEAR FROM receipt_date) = ?;
+//     `, [userId, prevMonth, prevYear])
+
+//     const thisMonthTotal = thisMonthRows[0].total_amount || 0
+//     const lastMonthTotal = lastMonthRows[0].total_amount || 0
+
+//     let percentChange = 0;
+//     if (lastMonthTotal > 0) {
+//       percentChange = ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100;
+//     }
+
+//     res.json({
+//       thisMonth: thisMonthTotal,
+//       lastMonth: lastMonthTotal,
+//       percentChange: percentChange.toFixed(2)
+//     });
+
+//     console.log(thisMonthRows);
+//     console.log(lastMonthRows);
+//   } catch (err) {
+//     res.status(500).json({message: err.message})
+//   }
+// })
+
+app.post('/monthlyTotal', authenticateToken, async (req, res) => {
   try {
-    const userId = req.user.id;
-    const now = new Date();
+    const userId = req.user?.id;
+
     const {month, year} = req.body;
-    const finalMonth = month || (new Date().getMonth() + 1);
-    const finalYear = year || (new Date().getFullYear());
 
-    let prevMonth = finalMonth - 1;
-    let prevYear = finalYear;
-    if (prevMonth === 0) {
-      prevMonth = 12;
-      prevYear -= 1;
-    }
-
-    const [thisMonthRows] = await db.query(`
+    const [rows] = await db.query(`
       SELECT SUM(total_amount) as total_amount FROM receipts
       WHERE user_id = ? AND EXTRACT(MONTH FROM receipt_date) = ? AND EXTRACT(YEAR FROM receipt_date) = ?;
-    `, [userId, finalMonth, finalYear])
-    const [lastMonthRows] = await db.query(`
-      SELECT SUM(total_amount) as total_amount FROM receipts
-      WHERE user_id = ? AND EXTRACT(MONTH FROM receipt_date) = ? AND EXTRACT(YEAR FROM receipt_date) = ?;
-    `, [userId, prevMonth, prevYear])
+      `, [userId, month, year])
 
-    const thisMonthTotal = thisMonthRows[0].total_amount || 0
-    const lastMonthTotal = lastMonthRows[0].total_amount || 0
+    const total = rows?.[0].total_amount ?? 0;
 
-    let percentChange = 0;
-    if (lastMonthTotal > 0) {
-      percentChange = ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100;
-    }
+    res.json({total});
 
-    res.json({
-      thisMonth: thisMonthTotal,
-      lastMonth: lastMonthTotal,
-      percentChange: percentChange.toFixed(2)
-    });
-
-    console.log(thisMonthRows);
-    console.log(lastMonthRows);
+    console.log('Fetch /monthlyTotal: ', month, year);
   } catch (err) {
-    res.status(500).json({message: err.message})
+    res.status(500).json({ message: err.message})
   }
 })
+
+// app.post('/')
+
 
 // Route: ดึงข้อมูล receipt ของผู้ใช้
 app.post('/receipt_item', authenticateToken, async (req, res) => {

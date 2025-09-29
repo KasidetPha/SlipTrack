@@ -47,7 +47,8 @@ class HomeHeader extends StatelessWidget {
           ],
           child: CircleAvatar(
             radius: 30,
-            backgroundImage: const AssetImage("assets/images/profiles/profile_test.jpg"),
+            backgroundColor: Colors.white,
+            child: Text('K', style: GoogleFonts.prompt(color: Colors.black, fontSize: 30),),
           ),
         ),
       ],

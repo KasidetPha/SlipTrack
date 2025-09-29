@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
-// import 'package:frontend/models/receipt_item.dart';
+import 'package:frontend/services/api_client.dart';
+import 'package:frontend/services/receipt_service.dart';
+import 'package:frontend/models/receipt_item.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+// import 'dart:convert';
+// import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:frontend/pages/login_page.dart';
@@ -19,25 +21,6 @@ class ItemsRecent extends StatefulWidget {
   State<ItemsRecent> createState() => _ItemsRecentState();
 }
 
-// แก้ ReceiptItem model ให้รองรับ total_price เป็น String
-class ReceiptItem {
-  final String item_name;
-  final double total_price;
-  final DateTime receipt_date;
-  final int quantity;
-
-  ReceiptItem({required this.item_name, required this.total_price, required this.receipt_date, required this.quantity});
-
-  factory ReceiptItem.fromJson(Map<String, dynamic> json) {
-    // final parsedDate = DateTime.tryParse(json['receipt_date'] ?? '');
-    return ReceiptItem(
-      item_name: json['item_name'] ?? '',
-      total_price: double.tryParse(json['total_price'].toString()) ?? 0.0,
-      receipt_date: DateTime.tryParse(json['receipt_date'] ?? '')?.toLocal() ?? DateTime.now(),
-      quantity: json['quantity'] ?? ''
-    );
-  }
-}
 
 class _ItemsRecentState extends State<ItemsRecent> {
   late Future<List<ReceiptItem>> _futureItems;
@@ -47,7 +30,8 @@ class _ItemsRecentState extends State<ItemsRecent> {
   void initState() {
     // TODO: implement initState
     super.initState();
-    _futureItems = fetchReceiptItems();
+    // _futureItems = fetchReceiptItems();
+    _futureItems = _load();
   }
 
   @override
@@ -57,7 +41,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
     if(oldWidget.selectedMonth != widget.selectedMonth || oldWidget.selectedYear != widget.selectedYear) {
       print("refreshing data for ${widget.selectedMonth}/${widget.selectedYear}");
       setState(() {
-        _futureItems = fetchReceiptItems();
+        _futureItems = _load();
       });
     }
   }
@@ -65,6 +49,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
   Future<void> logoutAndRedirect() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('token');
+    ApiClient().clearToken();
     if (!mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
@@ -73,7 +58,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
     );
   }
 
-  Future<List<ReceiptItem>> fetchReceiptItems() async {
+  Future<List<ReceiptItem>> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token') ?? '';
 
@@ -82,26 +67,17 @@ class _ItemsRecentState extends State<ItemsRecent> {
       return [];
     }
 
-    final response = await http.post(
-      Uri.parse('http://localhost:3000/receipt_item'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'Content-Type': 'application/json',
-      },
-      body: json.encode({
-        'month': widget.selectedMonth,
-        'year': widget.selectedYear,
-      })
-    );
+    ApiClient().setToken(token);
 
-    if (response.statusCode == 200) {
-      final List<dynamic> jsonData = json.decode(response.body);
-      return jsonData.map((item) => ReceiptItem.fromJson(item)).toList();
-    } else if (response.statusCode == 401 || response.statusCode == 403) {
-      await logoutAndRedirect();
-      return [];
-    } else {
-      throw Exception("Can't fetch Receipt: ${response.statusCode}");
+    try {
+      final items = await ReceiptService().fetchReceiptItems(month: widget.selectedMonth, year: widget.selectedYear);
+      return items;
+    } on ApiException catch (e) {
+      if (e.statusCode == 401 || e.statusCode == 403) {
+        await logoutAndRedirect();
+        return [];
+      }
+      rethrow;
     }
   }
 
@@ -115,7 +91,19 @@ class _ItemsRecentState extends State<ItemsRecent> {
         } else if (snapshot.hasError) {
           return Center(child: Text("Error: ${snapshot.error}"));
         } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
-          return const Center(child: Text("Not found Item"));
+          return const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 24),
+            child: Row(
+              children: [
+                Expanded(
+                  child: SizedBox(
+                    height: 78,
+                    child: _EmptyTransactionCard(),
+                  )
+                ),
+              ],
+            ),
+          );
         }
 
         final items = snapshot.data!;
@@ -158,7 +146,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
                                       Text("x${item.quantity}", style: GoogleFonts.prompt(fontWeight: FontWeight.w500, color: Colors.grey),),
                                     ],
                                   ),
-                                  Text(DateFormat('dd/MM/yyyy').format(item.receipt_date), style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5)),)
+                                  Text(DateFormat('dd/MM/yyyy').format(item.receiptDate), style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5)),)
                                 ]
                               ),
                             ],
@@ -181,6 +169,56 @@ class _ItemsRecentState extends State<ItemsRecent> {
           ),
         );
       }
+    );
+  }
+}
+
+class _EmptyTransactionCard extends StatelessWidget {
+  const _EmptyTransactionCard({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 78,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1.5)
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(15),
+        child: Center(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Row(
+                children: [
+                  Image.asset(
+                    "assets/images/icons/icon_food.png",
+                    width: 25,
+                    height: 25,
+                  ),
+                  const SizedBox(width: 15),
+                  Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("No transactions", style: GoogleFonts.prompt(fontWeight: FontWeight.bold)),
+                      Text("for this period", style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5))),
+                    ],
+                  ),
+                ],
+              ),
+              Text(
+                "฿0.00",
+                style: GoogleFonts.prompt(color: Colors.red, fontWeight: FontWeight.bold, fontSize: 18),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
