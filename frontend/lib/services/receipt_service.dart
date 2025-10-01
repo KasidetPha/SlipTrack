@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:frontend/models/category_total.dart';
+import 'package:frontend/models/first_Username_icon.dart';
 import 'package:frontend/models/monthly_total.dart';
 import 'package:frontend/models/receipt_item.dart';
 import 'package:frontend/models/stats_summary.dart';
@@ -126,5 +128,80 @@ class ReceiptService {
       return 100.0;
     }
     return ((current - previous) / previous) * 100.0;
+  }
+
+  // ดึงยอดรวม ตามหมวดหมู่
+  Future<List<CategoryTotal>> fetchCategoryTotals({
+    required int month,
+    required int year,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final res = await _dio.post(
+        '/receipt_item/categories',
+        data: {'month':month, 'year':year},
+        cancelToken: cancelToken
+      );
+
+      if (res.statusCode == 200) {
+        final data = res.data;
+        if (data is! List) {
+          throw ApiException('Unexpected response shape', statusCode: res.statusCode);
+        }
+
+        final list = data
+          .whereType<Map>()
+          .cast<Map<String, dynamic>>()
+          .map(CategoryTotal.fromJson)
+          .toList()
+          ..sort((a,b) => b.totalSpent.compareTo(a.totalSpent)); // เรียงจากมากไปน้อย
+        return list;
+      }
+
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        throw ApiException('Unauthorized', statusCode: res.statusCode);
+      }
+      throw ApiException('Fetch failed', statusCode: res.statusCode);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final body = e.response?.data;
+      final msg = (body is Map && (body['message'] != null || body['Message'] != null))
+        ? (body['message'] ?? body['Message']).toString()
+        : e.message ?? 'Network error';
+      
+      throw ApiException(msg, statusCode: code);
+    }
+  }
+
+  // นำตัวแรกของ Username มาทำ เป็น icon
+  Future<FirstUsernameIcon> fetchInitial({
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final res = await _dio.get(
+        '/firstUsername/icon',
+        cancelToken: cancelToken
+      );
+
+      if (res.statusCode == 200) {
+        final data = res.data;
+        if (data is! Map) {
+          throw ApiException('Unexpected response shape', statusCode: res.statusCode);
+        }
+        return FirstUsernameIcon.fromJson(Map<String, dynamic>.from(data));
+      }
+
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        throw ApiException('Unauthorized', statusCode: res.statusCode);
+      }
+      throw ApiException('Fecth failed', statusCode: res.statusCode);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final body = e.response?.data;
+      final msg = (body is Map && (body['message'] != null || body['Message'] != null))
+        ? (body['message'] ?? body['Message']).toString()
+        : e.message ?? 'Network error';
+      throw ApiException(msg, statusCode: code);
+    }
   }
 }

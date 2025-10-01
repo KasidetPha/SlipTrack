@@ -92,6 +92,7 @@ app.post('/receipt_item/categories', authenticateToken, async (req,res) => {
 
     const [rows] = await db.query(`
       SELECT 
+        categories.category_id,
         categories.category_name,
         SUM(receipt_items.total_price) AS total_spent
       FROM receipt_items
@@ -178,7 +179,9 @@ app.post('/monthlyTotal', authenticateToken, async (req, res) => {
   }
 })
 
-// app.post('/')
+app.get('/', (req, res) => {
+  return res.json({msg: "success"})
+});
 
 
 // Route: ดึงข้อมูล receipt ของผู้ใช้
@@ -211,6 +214,32 @@ app.post('/receipt_item', authenticateToken, async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 });
+
+// นำตัวแรกของ Username มาทำ icon profile เป็นค่าเริ่มต้น
+app.get('/firstUsername/icon', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({message: 'Unauthorized'});
+    }
+
+    const [rows] = await db.query(`
+      SELECT LEFT(username, 1) AS initial FROM users WHERE user_id = ? LIMIT 1
+      `, [userId]);
+
+    const row = Array.isArray(rows) ? rows[0] : undefined;
+
+    if (!row) {
+      return res.status(404).json({ message: 'User not found'});
+    }
+
+    return res.status(200).json({username: row.initial});
+  } catch (e) {
+    console.error('GET /firstUsername/icon error:', e);
+    return res.status(500).json({message: "Internal server error"});
+  }
+})
 
 // Start server
 app.listen(3000, () => {

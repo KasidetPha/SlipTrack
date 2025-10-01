@@ -1,7 +1,10 @@
-import 'dart:convert';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:frontend/models/category_total.dart';
+import 'package:frontend/services/api_client.dart';
+import 'package:frontend/services/receipt_service.dart';
+import 'package:frontend/utils/category_icon_mapper.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -22,15 +25,19 @@ class MostCategory extends StatefulWidget {
 
 class _MostCategoryState extends State<MostCategory> {
   final curencyTh = NumberFormat.currency(locale: 'th_TH', symbol: '฿');
-  List<Map<String, dynamic>> categories = [];
+  // List<Map<String, dynamic>> categories = [];
+  List<CategoryTotal> _categories = [];
   bool _loading = false;
   String ? _error;
+
+  CancelToken? _cancelToken;
 
   @override
   void initState() {
     super.initState();
     _notifyHasData(false);
-    fetchCategories();
+    _cancelToken = CancelToken();
+    _fetchCategories();
   }
 
   @override
@@ -39,8 +46,14 @@ class _MostCategoryState extends State<MostCategory> {
     if (oldWidget.selectedMonth != widget.selectedMonth ||
     oldWidget.selectedYear != widget.selectedYear) {
       _notifyHasData(false);
-      fetchCategories();
+      _fetchCategories();
     }
+  }
+
+  @override
+  void dispose() {
+    _cancelToken?.cancel('disposed');
+    super.dispose();
   }
 
   void _notifyHasData(bool hasData) {
@@ -52,63 +65,71 @@ class _MostCategoryState extends State<MostCategory> {
     }
   }
   
-  double _parseDouble(dynamic v) {
-    if (v == null) return 0.0;
-    if (v is num) return v.toDouble();
-    return double.tryParse(v.toString().replaceAll(',', '')) ?? 0.0;
+  // double _parseDouble(dynamic v) {
+  //   if (v == null) return 0.0;
+  //   if (v is num) return v.toDouble();
+  //   return double.tryParse(v.toString().replaceAll(',', '')) ?? 0.0;
+  // }
+
+  Future<void> _syncTokenToClient() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    if (token != null && token.isNotEmpty) {
+      ApiClient().setToken(token);
+    } else {
+      print('MostCategory: token is empty');
+    }
   }
 
-  Future<void> fetchCategories() async {
+  Future<void> _fetchCategories() async {
     setState(() {
       _loading = true;
       _error = null;
     });
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final token = prefs.getString('token') ?? '';
+      await _syncTokenToClient();
 
-      if (token.isEmpty) {
-        throw Exception('Token is empty');
-      }
-
-      final response = await http.post(
-        Uri.parse('http://localhost:3000/receipt_item/categories'),
-        headers: {
-          'Authorization': 'Bearer $token',
-          'Content-Type': 'application/json'
-        },
-        body: json.encode({
-          'month': widget.selectedMonth,
-          'year': widget.selectedYear
-        })
+      final list = await ReceiptService().fetchCategoryTotals(
+        month: widget.selectedMonth, 
+        year: widget.selectedYear,
+        cancelToken: _cancelToken
       );
 
-      if (response.statusCode != 200) {
-        throw Exception("HTTP ${response.statusCode}: ${response.body}");
-      }
-
-      final List<dynamic> data = json.decode(response.body);
-      final list = data.map((e) {
-        return {
-          'category_name': (e['category_name'] ?? '').toString(),
-          'total_spent': _parseDouble(e['total_spent'])
-        };
-      }).toList()..sort((a,b) => (b['total_spent'] as double).compareTo(a['total_spent'] as double));
-
       if (!mounted) return;
       setState(() {
-        categories = list;
+        _categories = list;
         _loading = false;
       });
-      if (mounted) {
-        _notifyHasData(categories.isNotEmpty);
-      }
+      _notifyHasData(_categories.isNotEmpty);
+
+    } on DioException catch (e) {
+      if (!mounted) return;
+      // ignroe: avoid_print
+      print('MostCategory Dio error: ${e.response?.statusCode} ${e.message}');
+      setState(() {
+        _error = e.message ?? 'Network error';
+        _loading = false;
+        _categories = [];
+      });
+      _notifyHasData(false);
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      print('MostCategory ApiException: ${e.statusCode} ${e.message}');
+      setState(() {
+        _error = "${e.message} (${e.statusCode ?? '-'})";
+        _loading = false;
+        _categories = [];
+      });
+      _notifyHasData(false);
     } catch (err) {
       if (!mounted) return;
+      print('MostCategory error: $err');
       setState(() {
-      _error = err.toString();
-      _loading = false;
+        _error = err.toString();
+        _loading = false;
+        _categories = [];
       });
       _notifyHasData(false);
     }
@@ -129,7 +150,7 @@ class _MostCategoryState extends State<MostCategory> {
       );
     }
 
-    if (categories.isEmpty) {
+    if (_categories.isEmpty) {
       return SizedBox(
         height: 140,
         child: Center(
@@ -138,8 +159,8 @@ class _MostCategoryState extends State<MostCategory> {
       );
     }
 
-    final topOne = categories.isNotEmpty ? categories[0] : null;
-    final topTwo = categories.length > 1 ? categories[1] : null;
+    final topOne = _categories.isNotEmpty ? _categories[0] : null;
+    final topTwo = _categories.length > 1 ? _categories[1] : null;
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -152,33 +173,28 @@ class _MostCategoryState extends State<MostCategory> {
               if (topOne != null)
                 Expanded(
                   child: _CategoryCard(
-                    color: Colors.green.withOpacity(0.1),
-                    amountStyle: GoogleFonts.prompt(fontSize: 18, color:Colors.green, fontWeight: FontWeight.bold),
-                    iconPath: "assets/images/icons/icon_food.png",
-                    name: topOne['category_name'],
-                    amountText: curencyTh.format(topOne['total_spent'] ?? 0.0),
+                    accent: colorForCategoryId(topOne.categoryId),
+                    bgColor: colorForCategoryId(topOne.categoryId).withOpacity(0.1),
+                    amountStyle: GoogleFonts.prompt(fontSize: 18, color: colorForCategoryId(topOne.categoryId), fontWeight: FontWeight.bold),
+                    iconData: iconForCategoryId(topOne.categoryId),
+                    name: topOne.categoryName,
+                    amountText: curencyTh.format(topOne.totalSpent)
                   ),
                 ),
               const SizedBox(width: 16),
               if (topTwo != null)
                 Expanded(
                   child: _CategoryCard(
-                    color: Colors.blue.withOpacity(0.1),
-                    amountStyle: GoogleFonts.prompt(fontSize: 18, color:Colors.blue, fontWeight: FontWeight.bold),
-                    iconPath: "assets/images/icons/icon_food.png",
-                    name: topTwo['category_name'],
-                    amountText: curencyTh.format(topTwo['total_spent'] ?? 0.0),
+                    iconData: iconForCategoryId(topTwo.categoryId),
+                    accent: colorForCategoryId(topTwo.categoryId),
+                    bgColor: colorForCategoryId(topTwo.categoryId).withOpacity(0.1),
+                    amountStyle: GoogleFonts.prompt(fontSize: 18, color: colorForCategoryId(topTwo.categoryId), fontWeight: FontWeight.bold),
+                    name: topTwo.categoryName,
+                    amountText: curencyTh.format(topTwo.totalSpent),
                   ),
                 ),
             ],
           ),
-          // SizedBox(height: 8,),
-          // TextButton.icon(
-          //   style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), iconAlignment: IconAlignment.end),
-          //   onPressed: () {}, 
-          //   label: Text("See All", style: GoogleFonts.prompt(color: Colors.blueAccent),),
-          //   icon: const Icon(Icons.chevron_right_rounded),
-          // ),
         ],
       ),
     );
@@ -186,16 +202,20 @@ class _MostCategoryState extends State<MostCategory> {
 }
 
 class _CategoryCard extends StatelessWidget {
-  final Color color;
+  final Color bgColor;
+  final IconData iconData;
+  final Color accent;
   final TextStyle amountStyle;
-  final String iconPath;
+  // final String iconPath;
   final String name;
   final String amountText;
   
   const _CategoryCard({
-    required this.color,
+    required this.bgColor,
+    required this.iconData,
+    required this.accent,
     required this.amountStyle,
-    required this.iconPath,
+    // required this.iconPath,
     required this.name,
     required this.amountText,
   });
@@ -206,13 +226,13 @@ class _CategoryCard extends StatelessWidget {
       height: 140,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: color, 
+        color: bgColor, 
         borderRadius: BorderRadius.circular(12)
       ), child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          Image.asset(iconPath, width: 30, height: 30,),
+          Icon(iconData, size: 28, color: accent,),
           Text(name, style: GoogleFonts.prompt(fontSize: 16, color: Colors.black),),
           Text(amountText, style: amountStyle)
         ],
