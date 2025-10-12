@@ -278,22 +278,22 @@ class _LoginPageState extends State<LoginPage> {
                       onPressed: () => fillCreds('user1'),
                       child: const Text("user1"),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 5),
                     FilledButton(
                       onPressed: () => fillCreds('user2'),
                       child: const Text("user2"),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 5),
                     FilledButton(
                       onPressed: () => fillCreds('user3'),
                       child: const Text("user3"),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 5),
                     FilledButton(
                       onPressed: () => fillCreds('user4'),
                       child: const Text("user4"),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 5),
                     FilledButton(
                       onPressed: () => fillCreds('user5'),
                       child: const Text("user5"),

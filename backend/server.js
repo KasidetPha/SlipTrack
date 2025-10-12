@@ -113,51 +113,6 @@ app.post('/receipt_item/categories', authenticateToken, async (req,res) => {
   }
 });
 
-// app.post('/getMonthlyExpensesComparison', authenticateToken, async (req, res) => {
-//   try {
-//     const userId = req.user.id;
-//     const now = new Date();
-//     const {month, year} = req.body;
-//     const finalMonth = month || (new Date().getMonth() + 1);
-//     const finalYear = year || (new Date().getFullYear());
-
-//     let prevMonth = finalMonth - 1;
-//     let prevYear = finalYear;
-//     if (prevMonth === 0) {
-//       prevMonth = 12;
-//       prevYear -= 1;
-//     }
-
-//     const [thisMonthRows] = await db.query(`
-//       SELECT SUM(total_amount) as total_amount FROM receipts
-//       WHERE user_id = ? AND EXTRACT(MONTH FROM receipt_date) = ? AND EXTRACT(YEAR FROM receipt_date) = ?;
-//     `, [userId, finalMonth, finalYear])
-//     const [lastMonthRows] = await db.query(`
-//       SELECT SUM(total_amount) as total_amount FROM receipts
-//       WHERE user_id = ? AND EXTRACT(MONTH FROM receipt_date) = ? AND EXTRACT(YEAR FROM receipt_date) = ?;
-//     `, [userId, prevMonth, prevYear])
-
-//     const thisMonthTotal = thisMonthRows[0].total_amount || 0
-//     const lastMonthTotal = lastMonthRows[0].total_amount || 0
-
-//     let percentChange = 0;
-//     if (lastMonthTotal > 0) {
-//       percentChange = ((thisMonthTotal - lastMonthTotal) / lastMonthTotal) * 100;
-//     }
-
-//     res.json({
-//       thisMonth: thisMonthTotal,
-//       lastMonth: lastMonthTotal,
-//       percentChange: percentChange.toFixed(2)
-//     });
-
-//     console.log(thisMonthRows);
-//     console.log(lastMonthRows);
-//   } catch (err) {
-//     res.status(500).json({message: err.message})
-//   }
-// })
-
 app.post('/monthlyTotal', authenticateToken, async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -194,10 +149,11 @@ app.post('/receipt_item', authenticateToken, async (req, res) => {
     const finalYear = year || (new Date().getYear());
     const [rows] = await db.query(`
       SELECT
-        u.full_name, ri.total_price, ri.item_name, r.receipt_date, ri.quantity
+      ri.item_id, u.full_name, ri.total_price, ri.item_name, r.receipt_date, ri.quantity, ca.category_id
       FROM receipts r
       LEFT JOIN users u ON u.user_id = r.user_id
       LEFT JOIN receipt_items ri ON ri.receipt_id = r.receipt_id
+      LEFT JOIN categories ca ON ca.category_id = ri.category_id
       WHERE r.user_id = ?
         AND MONTH(r.receipt_date) = ?
         AND YEAR(r.receipt_date)  = ?
@@ -240,6 +196,139 @@ app.get('/firstUsername/icon', authenticateToken, async (req, res) => {
     return res.status(500).json({message: "Internal server error"});
   }
 })
+
+// category -> see all
+
+// รายชื่อหมวดหมู่ทั้งหมด
+// SELECT * FROM categories;
+
+// จำนวนเงินของหมวดหมู่นั้นตามเดือนและปีและ ผู้ใช้ และ จำนวนรายการของหมวดหมู่นั้นๆ
+app.post('/categories/summary', authenticateToken, async (req,res) => {
+  try {
+    const userId = req.user?.id;
+    const {month, year} = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized'});
+    }
+    if (!month || !year) {
+      return res.status(400).json({ message: 'Month and Year are required'});
+    }
+
+    const [rows] = await db.query(`
+      SELECT 
+        cate.category_id,
+        cate.category_name, 
+        COALESCE(SUM(
+            CASE 
+              WHEN re.user_id = ?
+                    AND MONTH(re.receipt_date) = ?
+                    AND YEAR(re.receipt_date) = ?
+              THEN ri.total_price
+            END
+        ), 0) as total,
+        COALESCE(COUNT(
+            CASE 
+              WHEN re.user_id = ?
+                    AND MONTH(re.receipt_date) = ?
+                    AND YEAR(re.receipt_date) = ?
+              THEN ri.item_name
+            END
+        ),0) AS item_count
+      FROM categories as cate
+      LEFT JOIN receipt_items as ri ON ri.category_id = cate.category_id
+      LEFT JOIN receipts as re ON re.receipt_id = ri.receipt_id 
+      GROUP BY cate.category_name
+      ORDER BY total DESC;
+    `, [userId, month, year, userId, month, year, ]);
+
+    const [totalThisMonthRows] = await db.query(`
+      SELECT COALESCE(SUM(total_amount), 0) AS total_month FROM receipts AS re
+      WHERE re.user_id = ?
+      AND MONTH(re.receipt_date) = ?
+      AND YEAR(re.receipt_date) = ?;
+    `, [userId, month, year]);
+
+    const totalMonth = totalThisMonthRows[0]?.total_month || 0;
+
+    res.json({
+      totalMonth,
+      categories: rows
+    })
+
+  } catch (err) {
+    console.error('POST /categories/summary error:', err);
+    res.status(500).json({ message: 'Internal server error', error: err.message})
+  }
+})
+
+// update item
+app.put('/receipt_item/:id', authenticateToken, async (req, res) => {
+  const conn = await db.getConnection();
+  try {
+    const userId = req.user?.id;
+    const { id } = req.params;
+    const { item_name, quantity, total_price, receipt_date, category_id} = req.body;
+
+    if (!userId) return res.status(401).json({message: 'Unauthorized'});
+    if (!id) return res.status(400).json({message: 'Missing item id'});
+
+    if (
+      typeof item_name !== 'string' ||
+      typeof quantity !== 'number' ||
+      typeof total_price !== 'number' ||
+      typeof category_id !== 'number'
+    ) {
+      return res.status(400).json({ message: 'Invalid or missing fields'});
+    }
+
+    await conn.beginTransaction();
+
+    const [[owner]] = await conn.query(`
+      SELECT ri.receipt_id AS rid
+      FROM receipt_items AS ri
+      JOIN receipts AS re ON re.receipt_id = ri.receipt_id
+      WHERE ri.item_id = ? AND re.user_id = ?
+      FOR UPDATE
+    `, [id, userId]);
+
+    if (!owner) {
+      await conn.rollback();
+      return res.status(404).json({message: 'Item not found'});
+    }
+
+    await conn.query(`
+      UPDATE receipt_items
+      SET item_name = ?, quantity = ?, total_price = ?, category_id = ?
+      WHERE item_id = ?
+    `, [item_name, quantity, total_price, category_id, id]);
+
+    if (receipt_date) {
+      await conn.query(`
+        UPDATE receipts SET receipt_date = ? WHERE receipt_id = ?
+      `, [receipt_date, owner.rid])
+    }
+
+    const [[row]] = await conn.query(`
+      SELECT 
+        ri.item_id, ri.item_name, ri.quantity, ri.total_price, ri.category_id,
+        re.receipt_date
+      FROM receipt_items ri
+      JOIN receipts re ON re.receipt_id = ri.receipt_id
+      WHERE ri.item_id = ?
+    `, [id]);
+
+    await conn.commit();
+    res.json(row || { ok: true });
+  } catch (err) {
+    await conn.rollback();
+    console.log('PUT /receipt_item/:id error:', err);
+    res.status(500).json({message: 'Internal server error', error: err.message});
+  } finally {
+    conn.release();
+  }
+})
+
 
 // Start server
 app.listen(3000, () => {

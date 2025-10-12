@@ -110,12 +110,10 @@ class _HomeHeaderState extends State<HomeHeader> {
           Text(
             "SlipTrack",
             style: GoogleFonts.prompt(
-              textStyle: const TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                letterSpacing: 1
-              ),
+              fontSize: 26,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
+              letterSpacing: 1
             )
           ),
           PopupMenuButton<int>(

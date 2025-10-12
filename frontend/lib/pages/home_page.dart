@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/category_seeall_page.dart';
+import 'package:frontend/widgets/home_page_widgets/expense_card.dart';
 import 'package:frontend/widgets/home_page_widgets/home_header.dart';
+import 'package:frontend/widgets/home_page_widgets/income_card.dart';
 import 'package:frontend/widgets/home_page_widgets/items_recent.dart';
 import 'package:frontend/widgets/home_page_widgets/month_year_dropdown.dart';
 import 'package:frontend/widgets/home_page_widgets/most_category.dart';
 import 'package:frontend/widgets/home_page_widgets/summary_card.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 // import 'package:frontend/models/items_list.dart';
 
 class HomePage extends StatefulWidget {
@@ -15,7 +19,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-
   int selectedMonth = DateTime.now().month;
   int selectedYear = DateTime.now().year;
   Key itemsRecentKey = UniqueKey(); // ใช้เพื่อ force rebuild ItemsRecent
@@ -30,11 +33,16 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  String getMonthName(int month) {
+    return DateFormat.MMMM().format(DateTime(0, month));
+  }
+
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: SingleChildScrollView(
+        // padding: const EdgeInsets.only(bottom: 76),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -71,9 +79,29 @@ class _HomePageState extends State<HomePage> {
                     onMonthYearChanged: onMonthYearChanged,
                   ),
                   SizedBox(height: 24),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: IncomeCard(
+                          selectedMonth: selectedMonth,
+                          selectedYear: selectedYear,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: ExpenseCard(                          
+                          selectedMonth: selectedMonth,
+                          selectedYear: selectedYear,
+                        )
+                      )
+                    ],
+                  ),
+                  SizedBox(height: 16),
                   SummaryCard(
                     selectedMonth: selectedMonth, 
                     selectedYear: selectedYear,
+                    title: "Total Expenses for ${getMonthName(selectedMonth)} $selectedYear",
+                    // isCategoryMode: false,
                   ),
                 ],
               ),
@@ -90,7 +118,14 @@ class _HomePageState extends State<HomePage> {
                   if (_hasCategoryData) 
                     TextButton.icon(
                       style: TextButton.styleFrom(iconAlignment: IconAlignment.end),
-                      onPressed: () {},
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(
+                          builder: (ctx) => CategorySeeall(
+                            selectedMonth: selectedMonth,
+                            selectedYear: selectedYear
+                          )
+                        ));
+                      },
                       label: Text("See All", style: GoogleFonts.prompt(color: Colors.grey,),),
                       icon: Icon(Icons.chevron_right_outlined, color: Colors.grey, size: 18,),
                     )
@@ -122,6 +157,7 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
+      
     );
   }
 }

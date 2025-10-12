@@ -11,11 +11,16 @@ import 'package:dio/dio.dart';
 class SummaryCard extends StatefulWidget {
   final int selectedMonth;
   final int selectedYear;
+  final String title;
+  final bool isCategoryMode;
 
   const SummaryCard({
     super.key, 
     required this.selectedMonth, 
-    required this.selectedYear
+    required this.selectedYear,
+    this.title = 'summary',
+    this.isCategoryMode = false
+    
   });
 
   @override
@@ -29,6 +34,7 @@ class _SummaryCardState extends State<SummaryCard> {
   late Future<StatsSummary> _future;
   CancelToken? _cancelToken;
   bool _loggingOut = false;
+  bool isPercentView = true;
 
   @override
   void initState() {
@@ -47,7 +53,7 @@ class _SummaryCardState extends State<SummaryCard> {
         setState(() {
           _future = _load(_cancelToken!);
         });
-      }
+    }
   }
   
   @override
@@ -168,7 +174,7 @@ class _SummaryCardState extends State<SummaryCard> {
         return Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           width: double.infinity,
-          height: 150,
+          // height: 200,
         
           decoration: BoxDecoration(
             // color: Colors.white,
@@ -186,15 +192,77 @@ class _SummaryCardState extends State<SummaryCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
-              Text("Total Expenses This Month", style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 15, color: Colors.white.withOpacity(0.8)),)),
-              Text(currencyTh.format(thisMonth), style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold),)),
               Row(
-              children: [
-                  Icon(arrowIcon, color: arrowColor,),
-                  const SizedBox(width: 5,),
-                  Text("${percentText} From Last Month", style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 15, color: Colors.white.withOpacity(0.8)),)),
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(widget.title, style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 20, color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.w500),)),
+                  // SizedBox(height: 12,),
+                  widget.isCategoryMode ? SizedBox.shrink() : 
+                  MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: Tooltip(
+                      message: isPercentView ? 'สลับมุมมองจำนวนเงิน (฿)' : 'สลับมุมมองเป็นเปอร์เซ็นต์ (%)',
+                      waitDuration: const Duration(milliseconds: 400),
+                      showDuration: const Duration(seconds: 3),
+                      verticalOffset: 10,
+                      preferBelow: false,
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.85),
+                        borderRadius: BorderRadius.circular(12)
+                      ),
+                      textStyle: GoogleFonts.prompt(color: Colors.white, fontSize: 12),
+                      child: Semantics(
+                        button: true,
+                        label: isPercentView
+                        ? 'Switch to amount view'
+                        : 'Switch to percent view',
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () {
+                          setState(() {
+                            isPercentView = !isPercentView;
+                          });
+                        },
+                        child: AnimatedRotation(
+                          turns: isPercentView ? 0 : 0.5,
+                          duration: const Duration(milliseconds: 300),
+                          curve: Curves.easeInOut,
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: const Icon(
+                              Icons.swap_horiz_rounded,
+                              size: 18,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                      ),
+                      ),
+                    ),
+                  )
                 ],
-              )
+              ),
+              SizedBox(height: 6,),
+              Text(currencyTh.format(thisMonth), style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold),)),
+
+              if (!widget.isCategoryMode) ...[
+                SizedBox(height: 6,),
+                Row(
+                children: [
+                    Icon(arrowIcon, color: arrowColor,),
+                    const SizedBox(width: 5,),
+                    Text(
+                      isPercentView 
+                      ? "${percentText} From Last Month"
+                      : "${isIncrease ? '+ ' : '- '}${currencyTh.format((thisMonth * percentChange.abs()) / 100)} From Last Month",
+                    style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 15, color: Colors.white.withOpacity(0.8)),)),
+                  ],
+                )
+              ]
             ],
           ),
         );

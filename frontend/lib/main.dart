@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
+// import 'package:frontend/pages/category_seeall_page.dart';
 import 'package:frontend/pages/login_page.dart';
-import 'package:frontend/pages/profile_page/budget_setting.dart';
-import 'package:frontend/pages/profile_page/edit_profile_page.dart';
 import 'package:frontend/services/auth_service.dart';
-import 'package:frontend/widgets/home_page_widgets/items_recent.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'widgets/bottom_nav_page.dart';
 
 void main() {
@@ -21,12 +20,22 @@ class MyApp extends StatelessWidget {
       title: 'SlipTrack',
       theme: ThemeData(
         primarySwatch: Colors.blue,
+        fontFamily: GoogleFonts.prompt().fontFamily,
+        useMaterial3: true
       ),
-      home: const SplashGate(),
+      // initialRoute: kDebugMode ? '/categories_all' : '/',
+      // routes: {
+      //   '/': (context) => const SplashGate(),
+      //   '/categories_all': (context) => const CategorySeeall(),
+      //   '/home': (context) => const BottomNavPage(),
+      //   '/login': (context) => const LoginPage()
+      // },
+      home: const SplashGate(), // ====> main
       // home: const BottomNavPage(),
       // home: const BudgetSetting(),
       // home: EditProfilePage()
       // home: ItemsRecentPage()
+      // home: CategorySeeall(selectedMonth: DateTime.now().month, selectedYear: DateTime.now().year,)
     );
   }
 }
@@ -43,7 +52,6 @@ class _SplashGateState extends State<SplashGate> {
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     _bootstrap();
   }

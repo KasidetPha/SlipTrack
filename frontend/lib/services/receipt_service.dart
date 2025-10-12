@@ -1,4 +1,6 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:frontend/models/category_summary.dart';
 import 'package:frontend/models/category_total.dart';
 import 'package:frontend/models/first_Username_icon.dart';
 import 'package:frontend/models/monthly_total.dart';
@@ -202,6 +204,97 @@ class ReceiptService {
         ? (body['message'] ?? body['Message']).toString()
         : e.message ?? 'Network error';
       throw ApiException(msg, statusCode: code);
+    }
+  }
+
+  // ทำหน้า seeall แสดงผลหมวดหมู่ที่ใช้ทั้งหมด
+  Future<List<CategorySummary>> fetchCategorySummary({
+    required int month,
+    required int year,
+    CancelToken? cancelToken
+  }) async {
+    try {
+      final res = await _dio.post(
+        '/categories/summary',
+        data: {'month': month, 'year': year},
+        cancelToken: cancelToken
+      );
+
+      if (res.statusCode == 200) {
+        final data = res.data;
+        if (data is! Map || data['categories'] == null) {
+          throw ApiException('Unexpected response shape', statusCode: res.statusCode);
+        }
+
+        final List<dynamic> list = data['categories'];
+        final totalMonth = double.tryParse(data['totalMonth']?.toString() ?? '0') ?? 0.0;
+
+        // เพิ่ม percent ต่อ หมวดหมู่
+        return list.map((e) {
+          final total = double.tryParse(e['total'].toString()) ?? 0.0;
+          final percent = totalMonth == 0 ? 0.0 : (total / totalMonth) * 100;
+
+          return CategorySummary(
+            categoryId: e['category_id'] ?? 0,
+            categoryName: e['category_name'] ?? '',
+            total: total,
+            itemCount: e['item_count'] ?? 0,
+            percent: percent
+          );
+        }).toList();
+      }
+      throw ApiException('Fecth failed', statusCode: res.statusCode);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final body = e.response?.data;
+      final msg = (body is Map && body['message'] != null)
+        ? body['message'].toString()
+        : e.message ?? 'Network error';
+      throw ApiException(msg, statusCode: code);
+    }
+  }
+
+  Future<void> updateReceiptItem( {
+    required int id,
+    required String itemName,
+    required int quantity,
+    required double totalPrice,
+    required DateTime receiptDate,
+    required int categoryId,
+    CancelToken? cancelToken,
+  }) async {
+    final body = {
+      'item_name': itemName,
+      'quantity': quantity,
+      'total_price': totalPrice,
+      'receipt_date': receiptDate.toIso8601String(),
+      'category_id': categoryId,
+    };
+
+    try {
+    final res = await _dio.put(
+      '/receipt_item/$id',
+      data: body, 
+      cancelToken: cancelToken,
+      options:  Options(headers: {'Content-Type': 'application/json'})
+    );
+
+    final code = res.statusCode ?? 0;
+    if (code >= 200 && code < 300) {
+      // ok หรือ 204 No content
+      return;
+    }
+    throw ApiException('Failed to update item', statusCode: code);
+
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final data = e.response?.data;
+      final msg = (data is Map && (data['message'] != null || data['Message'] != null))
+      ? (data['message'] ?? data['Message']).toString()
+      : e.message ?? 'Network error';
+    throw ApiException('Update failed: $msg', statusCode: code);
+    } catch (e) {
+      throw ApiException('Unexpected error: $e');
     }
   }
 }

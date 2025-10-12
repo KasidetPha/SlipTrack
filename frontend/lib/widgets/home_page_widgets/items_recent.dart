@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:frontend/services/api_client.dart';
 import 'package:frontend/services/receipt_service.dart';
 import 'package:frontend/models/receipt_item.dart';
+import 'package:frontend/utils/category_icon_mapper.dart';
+import 'package:frontend/widgets/Edit_Receipt_Item_Sheet.dart';
 import 'package:google_fonts/google_fonts.dart';
-// import 'dart:convert';
-// import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:frontend/pages/login_page.dart';
@@ -28,9 +28,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
-    // _futureItems = fetchReceiptItems();
     _futureItems = _load();
   }
 
@@ -44,6 +42,35 @@ class _ItemsRecentState extends State<ItemsRecent> {
         _futureItems = _load();
       });
     }
+  }
+
+  Future<void> _openEditModal(ReceiptItem item) async {
+    final bool? updated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: EditReceiptItemSheet(item: item),
+      )
+    );
+
+    if (!mounted) return;
+
+    if (updated == true) {
+      setState(() {
+        _futureItems = _load();
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved changes'))
+      );
+    }
+
   }
 
   Future<void> logoutAndRedirect() async {
@@ -113,53 +140,65 @@ class _ItemsRecentState extends State<ItemsRecent> {
             children: items.map((item) =>
               Padding(
                 padding: const EdgeInsets.fromLTRB(24,0,24,12),
-                child: Container(
-                  width: double.infinity,
-                  height: 78,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1.5)
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(15),
-                    child: Center(
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Row(
-                            children: [
-                              Image.asset(
-                                "assets/images/icons/icon_food.png",
-                                width: 25,
-                                height: 25,
-                              ),
-                              const SizedBox(width: 15,),
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text("${item.item_name} ", style: GoogleFonts.prompt(fontWeight: FontWeight.bold),),
-                                      Text("x${item.quantity}", style: GoogleFonts.prompt(fontWeight: FontWeight.w500, color: Colors.grey),),
-                                    ],
-                                  ),
-                                  Text(DateFormat('dd/MM/yyyy').format(item.receiptDate), style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5)),)
-                                ]
-                              ),
-                            ],
-                          ),
-                          Text(
-                            currencyTh.format(item.total_price),
-                            style: GoogleFonts.prompt(
-                              color: Colors.red,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: () {
+                    _openEditModal(item);
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    // height: 78,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1.5)
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(15),
+                      child: Center(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(
+                                  iconForCategoryId(item.category_id), 
+                                  color: colorForCategoryId(item.category_id),
+                                  size: 28,
+                                ),
+                                const SizedBox(width: 15,),
+                                Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text("${item.item_name} ", style: GoogleFonts.prompt(fontWeight: FontWeight.bold),),
+                                        Text("x${item.quantity}", style: GoogleFonts.prompt(fontWeight: FontWeight.w500, color: Colors.grey),),
+                                      ],
+                                    ),
+                                    Text(DateFormat('dd/MM/yyyy').format(item.receiptDate), style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5)),)
+                                  ]
+                                ),
+                              ],
                             ),
-                          )
-                        ],
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '-${currencyTh.format(item.total_price)}',
+                                  style: GoogleFonts.prompt(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18
+                                  ),
+                                ),
+                                Icon(Icons.chevron_right_outlined, size: 18, color: Colors.grey,)
+                              ],
+                            )
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -173,6 +212,8 @@ class _ItemsRecentState extends State<ItemsRecent> {
   }
 }
 
+
+
 class _EmptyTransactionCard extends StatelessWidget {
   const _EmptyTransactionCard({super.key});
 
@@ -180,7 +221,7 @@ class _EmptyTransactionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      height: 78,
+      // height: 78,
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
@@ -195,11 +236,7 @@ class _EmptyTransactionCard extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  Image.asset(
-                    "assets/images/icons/icon_food.png",
-                    width: 25,
-                    height: 25,
-                  ),
+                  Icon(Icons.receipt_long_outlined),
                   const SizedBox(width: 15),
                   Column(
                     mainAxisAlignment: MainAxisAlignment.center,
