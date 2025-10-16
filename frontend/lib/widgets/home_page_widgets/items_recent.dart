@@ -21,10 +21,9 @@ class ItemsRecent extends StatefulWidget {
   State<ItemsRecent> createState() => _ItemsRecentState();
 }
 
-
 class _ItemsRecentState extends State<ItemsRecent> {
   late Future<List<ReceiptItem>> _futureItems;
-    final currencyTh = NumberFormat.currency(locale: 'th_TH', symbol: '฿');
+  final currencyTh = NumberFormat.currency(locale: 'th_TH', symbol: '฿');
 
   @override
   void initState() {
@@ -174,7 +173,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
                                   children: [
                                     Row(
                                       children: [
-                                        Text("${item.item_name} ", style: GoogleFonts.prompt(fontWeight: FontWeight.bold),),
+                                        Text("${item.item_name} ", style: GoogleFonts.prompt(fontWeight: FontWeight.bold)),
                                         Text("x${item.quantity}", style: GoogleFonts.prompt(fontWeight: FontWeight.w500, color: Colors.grey),),
                                       ],
                                     ),

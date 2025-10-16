@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/models/category_summary.dart';
+import 'package:frontend/pages/category_detail_page.dart';
 import 'package:frontend/services/receipt_service.dart';
 import 'package:frontend/utils/category_icon_mapper.dart';
 import 'package:frontend/widgets/bottom_nav_page.dart';
@@ -49,13 +50,28 @@ class _CategorySeeallState extends State<CategorySeeall> {
       _future = ReceiptService().fetchCategorySummary(month: newMonth, year: newYear);
     });
 
-    print("Category_seeall -> newMonth: $newMonth, newYear: $newMonth");
+    print("Category_seeall -> newMonth: $newMonth, newYear: $newYear");
 
     // fetch ข้อมูลตามที่เลือก month/year
   }
   
   String getMonthName(int month) {
     return DateFormat.MMMM().format(DateTime(0, month));
+  }
+
+  void _openCategoryDetail(CategorySummary c) {
+    print('${c.categoryId}, ${c.categoryName}, ${month}, ${year}');
+    Navigator.push(
+      context, 
+      MaterialPageRoute(
+        builder: (ctx) => CategoryDetailPage(
+          categoryId: c.categoryId,
+          categoryName: c.categoryName,
+          month: month!,
+          year: year!
+        )
+      )
+    );
   }
 
   void _sortCategories(
@@ -67,11 +83,12 @@ class _CategorySeeallState extends State<CategorySeeall> {
         case "Sort by Percentage":
           categories.sort((a,b) => b.percent.compareTo(a.percent));
           break;
-        case "Sort by Transections":
+        case "Sort by Transactions":
           categories.sort((a,b) => b.itemCount.compareTo(a.itemCount));
           break;
         case "Sort by Name":
-          categories.sort((a,b) => a.categoryName.compareTo(b.categoryName));
+          categories.sort((a,b) => 
+            a.categoryName.toLowerCase().compareTo(b.categoryName.toLowerCase()));
           break;
         default:
           break;
@@ -113,25 +130,31 @@ class _CategorySeeallState extends State<CategorySeeall> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.start,
                     children: [
-                      InkWell(
-                        onTap: () {
-                          // Navigator.pop(context);
-                          Navigator.push(context, MaterialPageRoute(builder: (ctx) => const BottomNavPage()));
-                        },
-                        child: CircleAvatar(
-                          backgroundColor: Colors.white.withOpacity(0.2),
-                          child: Icon(Icons.arrow_back_rounded, color: Colors.white, size: 24,),
-                        )
+                      SizedBox(
+                        width: 48,
+                        height: 48,
+                        child: InkWell(
+                          onTap: () {
+                            // Navigator.pop(context);
+                            Navigator.push(context, MaterialPageRoute(builder: (ctx) => const BottomNavPage()));
+                          },
+                          child: CircleAvatar(
+                            backgroundColor: Colors.white.withOpacity(0.2),
+                            child: Icon(Icons.arrow_back_rounded, color: Colors.white, size: 24,),
+                          )
+                        ),
                       ),
                       Expanded(
                         child: Center(
-                          child: Text("Spending Categories", 
+                          child: Text("Spending Categories",
+                            textAlign: TextAlign.center,
                             style: GoogleFonts.prompt(fontSize: 26, 
                             fontWeight: FontWeight.bold, 
                             color: Colors.white),
                           )
                         )
                       ),
+                      SizedBox(width: 48, height: 48,)
                     ],
                   ),
                   SizedBox(height: 24),
@@ -139,13 +162,13 @@ class _CategorySeeallState extends State<CategorySeeall> {
                     initialMonth: month,
                     initialYear: year,
                     onMonthYearChanged: (newMonth, newYear) {
-                      setState(() {
-                        month = newMonth;
-                        year = newYear;
+                      onMonthYearChange(newMonth, newYear);
+                      // setState(() {
+                      //   month = newMonth;
+                      //   year = newYear;
                         
-                        _future = ReceiptService().fetchCategorySummary(month: newMonth, year: newYear);
-                      });
-
+                      //   _future = ReceiptService().fetchCategorySummary(month: newMonth, year: newYear);
+                      // });
                     print("category_seeall -> newMonth: $newMonth, newYear: $newYear");
                     },
                   ),
@@ -163,7 +186,7 @@ class _CategorySeeallState extends State<CategorySeeall> {
             // SizedBox(height: 24,),
             Padding(
               padding: const EdgeInsets.all(24),
-              child: FutureBuilder(
+              child: FutureBuilder<List<CategorySummary>>(
                 future: _future, 
                 builder: (context, snapshot) {
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -172,13 +195,15 @@ class _CategorySeeallState extends State<CategorySeeall> {
                   if (snapshot.hasError) {
                     return Center(child: Text('เกิดข้อผิดพลาด: ${snapshot.error}'),);
                   }
-                  final list = snapshot.data ?? [];
+                  // final list = snapshot.data ?? [];
 
-                  if (list.isEmpty) {
-                    return const Center(child: Text('ไม่มีข้อมูล'),);
-                  }
 
-                  final categories = snapshot.data ?? [];
+                  // if (list.isEmpty) {
+                  //   return const Center(child: Text('ไม่มีข้อมูล'),);
+                  // }
+
+                  // final categories = snapshot.data ?? [];
+                  final categories = List<CategorySummary>.from(snapshot.data ?? []);
 
                   if (categories.isEmpty) {
                     return const Center(child: Text('ไม่มีข้อมูล'));
@@ -245,84 +270,93 @@ class _CategorySeeallState extends State<CategorySeeall> {
                       const SizedBox(height: 24,),
 
                       // Column map -> widget list
-                      ...list.map((c) => Container(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius:  BorderRadius.circular(12),
-                          border: Border.all(
-                            color: Colors.grey.withOpacity(0.2),
-                            width: 1.5,
-
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
-                              blurRadius: 4,
-                              offset: const Offset(0, 2)
-                            )
-                          ]
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      ...categories.map((c) {
+                        final progress = (c.percent / 100).clamp(0, 1).toDouble();
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: InkWell(
+                            onTap: () => _openCategoryDetail(c),
+                              // print("go page detail receitp category");
+                            child: Container(
+                            // margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius:  BorderRadius.circular(12),
+                              border: Border.all(
+                                color: Colors.grey.withOpacity(0.2),
+                                width: 1.5,
+                            
+                              ),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2)
+                                )
+                              ]
+                            ),
+                            child: Column(
                               children: [
-                                Expanded(
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      CircleAvatar(
-                                        backgroundColor: colorForCategoryId(c.categoryId).withOpacity(0.2),
-                                        child: Icon(
-                                          iconForCategoryId(c.categoryId),
-                                          color: colorForCategoryId(c.categoryId),
-                                        ),
-                                      ),
-                                      SizedBox(width: 12,),
-                                      Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    Expanded(
+                                      child: Row(
+                                        crossAxisAlignment: CrossAxisAlignment.center,
                                         children: [
-                                          Text(c.categoryName, style: GoogleFonts.prompt(),),
-                                          SizedBox(height: 4,),
-                                          if (c.itemCount > 1)
-                                            Text("${c.itemCount} transactions", style: GoogleFonts.prompt(color: Colors.grey[600]),)
-                                          else
-                                            Text("${c.itemCount} transaction", style: GoogleFonts.prompt(color: Colors.grey[600]),)
+                                          CircleAvatar(
+                                            backgroundColor: colorForCategoryId(c.categoryId).withOpacity(0.2),
+                                            child: Icon(
+                                              iconForCategoryId(c.categoryId),
+                                              color: colorForCategoryId(c.categoryId),
+                                            ),
+                                          ),
+                                          SizedBox(width: 12,),
+                                          Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(c.categoryName, style: GoogleFonts.prompt(),),
+                                              SizedBox(height: 4,),
+                                              if (c.itemCount > 1)
+                                                Text("${c.itemCount} transactions", style: GoogleFonts.prompt(color: Colors.grey[600]),)
+                                              else
+                                                Text("${c.itemCount} transaction", style: GoogleFonts.prompt(color: Colors.grey[600]),)
+                                            ],
+                                          ),
                                         ],
                                       ),
-                                    ],
-                                  ),
-                                ),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Text(currencyTh.format(c.total), style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.bold),),
-                                    Text("${c.percent.toStringAsFixed(2)}%", style: GoogleFonts.prompt(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.grey[600]),),
+                                    ),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text(currencyTh.format(c.total), style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.bold),),
+                                        Text("${c.percent.toStringAsFixed(2)}%", style: GoogleFonts.prompt(fontSize: 14, fontWeight: FontWeight.normal, color: Colors.grey[600]),),
+                                      ],
+                                    )
                                   ],
+                                ),
+                                SizedBox(height: 12,),
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: LinearProgressIndicator(
+                                    value:  progress,
+                                    minHeight: 10,
+                                    // backgroundColor: Colors.grey[200],
+                                    backgroundColor: colorForCategoryId(c.categoryId).withOpacity(0.2),
+                                    color: colorForCategoryId(c.categoryId)
+                                  ),
                                 )
                               ],
                             ),
-                            SizedBox(height: 12,),
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: LinearProgressIndicator(
-                                value:  (c.percent / 100).clamp(0, 1),
-                                minHeight: 10,
-                                // backgroundColor: Colors.grey[200],
-                                backgroundColor: colorForCategoryId(c.categoryId).withOpacity(0.2),
-                                color: colorForCategoryId(c.categoryId)
-                              ),
-                            )
-                          ],
-                        ),
-                      )),
+                            ),
+                          ),
+                        );
+                    }).toList(),
                     ],
                   );
                 }
               )
-
             ),
           ],
         ),

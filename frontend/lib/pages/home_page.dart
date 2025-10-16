@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/pages/category_seeall_page.dart';
+import 'package:frontend/pages/scan_page.dart';
+import 'package:frontend/widgets/drawer/sliptrack_drawer.dart';
 import 'package:frontend/widgets/home_page_widgets/expense_card.dart';
 import 'package:frontend/widgets/home_page_widgets/home_header.dart';
 import 'package:frontend/widgets/home_page_widgets/income_card.dart';
@@ -38,9 +40,19 @@ class _HomePageState extends State<HomePage> {
   }
 
 
+
   @override
   Widget build(BuildContext context) {
+
+  final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
+      drawer: SliptrackDrawer(
+        displayName: 'kasidet', 
+        email: 'Kasidet@gmail.com', 
+        balance: 12000,
+        onScanReceipt: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanPage()))
+      ),
       body: SingleChildScrollView(
         // padding: const EdgeInsets.only(bottom: 76),
         child: Column(
@@ -100,7 +112,7 @@ class _HomePageState extends State<HomePage> {
                   SummaryCard(
                     selectedMonth: selectedMonth, 
                     selectedYear: selectedYear,
-                    title: "Total Expenses for ${getMonthName(selectedMonth)} $selectedYear",
+                    title: "Current Balance ${getMonthName(selectedMonth)} $selectedYear",
                     // isCategoryMode: false,
                   ),
                 ],

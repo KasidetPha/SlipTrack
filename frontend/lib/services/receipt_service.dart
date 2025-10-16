@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:frontend/models/category_detail.dart';
 import 'package:frontend/models/category_summary.dart';
 import 'package:frontend/models/category_total.dart';
 import 'package:frontend/models/first_Username_icon.dart';
@@ -295,6 +296,64 @@ class ReceiptService {
     throw ApiException('Update failed: $msg', statusCode: code);
     } catch (e) {
       throw ApiException('Unexpected error: $e');
+    }
+  }
+
+  // เมื่อเลือก หมวดหมู่ใน category seeall แล้วจะแสดง หมวดหมู่ของรายการนั้นๆ ทั้งหมด
+
+  Future<List<CategoryDetail>> fetchCategoryItems({
+    required int categoryId,
+    int? month,
+    int? year,
+    CancelToken? cancelToken
+  }) async {
+    try {
+      final String path = '/categories/$categoryId/items';
+
+      final Map<String, dynamic> body = {
+        if (month != null) 'month': month,
+        if (year != null) 'year': year,
+      };
+
+      final res = await _dio.post(
+        path,
+        data: body,
+        cancelToken: cancelToken,
+      );
+
+      if (res.statusCode == 200) {
+        // final data = res.data;
+        // if (data is! List) {
+        //   throw ApiException('Unexpected response shape', statusCode: res.statusCode);
+        // }
+
+        final raw = res.data;
+
+        final List list = switch (raw) {
+          List l => l,
+          Map m when m['data'] is List => m['data'] as List,
+          _ => throw ApiException('Unexpected response shape', statusCode: res.statusCode)
+        };
+
+        return list
+        .whereType<Map>()
+        .cast<Map<String, dynamic>>()
+        .map(CategoryDetail.fromJson)
+        .toList();
+      }
+
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        throw ApiException('Unauthorized', statusCode: res.statusCode);
+      }
+      throw ApiException('Fetch failed', statusCode: res.statusCode);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final body = e.response?.data;
+      final msg = (body is Map && (body['message'] != null || body['Message'] != null))
+        ? (body['message'] ?? body['Message']).toString()
+        : e.message ?? 'Network error';
+
+      throw ApiException(msg, statusCode: code);
     }
   }
 }

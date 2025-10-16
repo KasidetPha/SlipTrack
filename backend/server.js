@@ -20,7 +20,7 @@ const db = mysql.createPool({
   queueLimit: 0
 });
 
-const SECRET = "sliptrackVersion1"; // ใช้ในการสร้างและตรวจสอบ JWT
+const SECRET = process.env.JWT_SECRET || "sliptrackVersion1"; // ใช้ในการสร้างและตรวจสอบ JWT
 
 // Middleware ตรวจสอบ JWT
 const authenticateToken = (req, res, next) => {
@@ -80,15 +80,18 @@ app.post('/receipt_item/categories', authenticateToken, async (req,res) => {
     const userId = req.user.id;
     const now = new Date();
     const {month, year} = req.body;
-    const finalMonth = month || (new Date().getMonth() + 1);
-    const finalYear = year || (new Date().getFullYear());
+    // const finalMonth = month || (new Date().getMonth() + 1);
+    // const finalYear = year || (new Date().getFullYear());
 
-    let prevMonth = finalMonth - 1;
-    let prevYear = finalYear;
-    if (prevMonth === 0) {
-      prevMonth = 12;
-      prevYear -= 1;
-    }
+    const finalMonth = month || (now.getMonth() + 1);
+    const finalYear = year || now.getFullYearyear();
+
+    // let prevMonth = finalMonth - 1;
+    // let prevYear = finalYear;
+    // if (prevMonth === 0) {
+    //   prevMonth = 12;
+    //   prevYear -= 1;
+    // }
 
     const [rows] = await db.query(`
       SELECT 
@@ -104,7 +107,7 @@ app.post('/receipt_item/categories', authenticateToken, async (req,res) => {
       GROUP BY categories.category_name
       ORDER BY total_spent DESC
       LIMIT 2;
-      `, [userId, month, year])
+      `, [userId, finalMonth, finalYear])
     console.log(rows);
     console.log(userId, finalMonth, finalYear);
     res.json(rows);
@@ -120,7 +123,7 @@ app.post('/monthlyTotal', authenticateToken, async (req, res) => {
     const {month, year} = req.body;
 
     const [rows] = await db.query(`
-      SELECT SUM(total_amount) as total_amount FROM receipts
+      SELECT COALESCE(SUM(total_amount), 0) as total_amount FROM receipts
       WHERE user_id = ? AND EXTRACT(MONTH FROM receipt_date) = ? AND EXTRACT(YEAR FROM receipt_date) = ?;
       `, [userId, month, year])
 
@@ -145,8 +148,11 @@ app.post('/receipt_item', authenticateToken, async (req, res) => {
     const userId = req.user?.id; // เอา user id จาก token
 
     const {month, year} = req.body;
-    const finalMonth = month || (new Date().getMonth() + 1);
-    const finalYear = year || (new Date().getYear());
+    // const finalMonth = month || (new Date().getMonth() + 1);
+    // const finalYear = year || (new Date().getYear());
+    const now = new Date();
+    const finalMonth = month || (now.getMonth() + 1);
+    const finalYear = year || (now.getFullYear());
     const [rows] = await db.query(`
       SELECT
       ri.item_id, u.full_name, ri.total_price, ri.item_name, r.receipt_date, ri.quantity, ca.category_id
@@ -199,9 +205,6 @@ app.get('/firstUsername/icon', authenticateToken, async (req, res) => {
 
 // category -> see all
 
-// รายชื่อหมวดหมู่ทั้งหมด
-// SELECT * FROM categories;
-
 // จำนวนเงินของหมวดหมู่นั้นตามเดือนและปีและ ผู้ใช้ และ จำนวนรายการของหมวดหมู่นั้นๆ
 app.post('/categories/summary', authenticateToken, async (req,res) => {
   try {
@@ -240,7 +243,7 @@ app.post('/categories/summary', authenticateToken, async (req,res) => {
       LEFT JOIN receipts as re ON re.receipt_id = ri.receipt_id 
       GROUP BY cate.category_name
       ORDER BY total DESC;
-    `, [userId, month, year, userId, month, year, ]);
+    `, [userId, month, year, userId, month, year]);
 
     const [totalThisMonthRows] = await db.query(`
       SELECT COALESCE(SUM(total_amount), 0) AS total_month FROM receipts AS re
@@ -329,6 +332,34 @@ app.put('/receipt_item/:id', authenticateToken, async (req, res) => {
   }
 })
 
+app.post('/categories/:categoryId/items', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const categoryId = Number.parseInt(req.params.categoryId, 10);
+    const {month, year} = req.body;
+    if (!Number.isFinite(categoryId)) return res.status(400).json({message: 'invalid categoryId'});
+
+    const [rows] = await db.query(`
+      SELECT ri.item_name, re.receipt_date, ri.quantity, ri.total_price
+      FROM categories c
+      JOIN receipt_items ri ON ri.category_id = c.category_id
+      JOIN receipts re      ON re.receipt_id  = ri.receipt_id
+      WHERE c.category_id = ?
+        AND re.user_id    = ?
+        AND MONTH(re.receipt_date) = ?
+        AND YEAR(re.receipt_date) = ?
+      ORDER BY re.receipt_date DESC, ri.item_name ASC
+      `, [categoryId, userId, month, year]
+    );
+
+    console.log('GET /categories/:categoryId/items', categoryId, userId, month, year);
+
+    res.json(rows);
+  } catch (err) {
+    console.error('GET /categories/:categoryId/items', err);
+    res.status(500).json({message: 'Internal server error'});
+  }
+})
 
 // Start server
 app.listen(3000, () => {

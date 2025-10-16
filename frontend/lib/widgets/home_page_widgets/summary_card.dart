@@ -195,74 +195,71 @@ class _SummaryCardState extends State<SummaryCard> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(widget.title, style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 20, color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.w500),)),
+                  Text(widget.title, style: GoogleFonts.prompt(textStyle: TextStyle(color: Colors.white.withOpacity(0.8), fontWeight: FontWeight.w500),)),
                   // SizedBox(height: 12,),
-                  widget.isCategoryMode ? SizedBox.shrink() : 
-                  MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    child: Tooltip(
-                      message: isPercentView ? 'สลับมุมมองจำนวนเงิน (฿)' : 'สลับมุมมองเป็นเปอร์เซ็นต์ (%)',
-                      waitDuration: const Duration(milliseconds: 400),
-                      showDuration: const Duration(seconds: 3),
-                      verticalOffset: 10,
-                      preferBelow: false,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.85),
-                        borderRadius: BorderRadius.circular(12)
-                      ),
-                      textStyle: GoogleFonts.prompt(color: Colors.white, fontSize: 12),
-                      child: Semantics(
-                        button: true,
-                        label: isPercentView
-                        ? 'Switch to amount view'
-                        : 'Switch to percent view',
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
-                        onTap: () {
-                          setState(() {
-                            isPercentView = !isPercentView;
-                          });
-                        },
-                        child: AnimatedRotation(
-                          turns: isPercentView ? 0 : 0.5,
-                          duration: const Duration(milliseconds: 300),
-                          curve: Curves.easeInOut,
-                          child: Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: const Icon(
-                              Icons.swap_horiz_rounded,
-                              size: 18,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ),
-                      ),
-                    ),
-                  )
+                  // widget.isCategoryMode ? SizedBox.shrink() : 
+                  // MouseRegion(
+                  //   cursor: SystemMouseCursors.click,
+                  //   child: Tooltip(
+                  //     message: isPercentView ? 'สลับมุมมองจำนวนเงิน (฿)' : 'สลับมุมมองเป็นเปอร์เซ็นต์ (%)',
+                  //     waitDuration: const Duration(milliseconds: 400),
+                  //     showDuration: const Duration(seconds: 3),
+                  //     verticalOffset: 10,
+                  //     preferBelow: false,
+                  //     decoration: BoxDecoration(
+                  //       color: Colors.black.withOpacity(0.85),
+                  //       borderRadius: BorderRadius.circular(12)
+                  //     ),
+                  //     textStyle: GoogleFonts.prompt(color: Colors.white, fontSize: 12),
+                  //     child: Semantics(
+                  //       button: true,
+                  //       label: isPercentView
+                  //       ? 'Switch to amount view'
+                  //       : 'Switch to percent view',
+                  //     child: InkWell(
+                  //       borderRadius: BorderRadius.circular(20),
+                  //       onTap: () {
+                  //         setState(() {
+                  //           isPercentView = !isPercentView;
+                  //         });
+                  //       },
+                  //       child: AnimatedRotation(
+                  //         turns: isPercentView ? 0 : 0.5,
+                  //         duration: const Duration(milliseconds: 300),
+                  //         curve: Curves.easeInOut,
+                  //         child: Container(
+                  //           padding: const EdgeInsets.all(6),
+                  //           decoration: BoxDecoration(
+                  //             color: Colors.white.withOpacity(0.15),
+                  //             borderRadius: BorderRadius.circular(20),
+                  //           ),
+                  //           child: const Icon(
+                  //             Icons.swap_horiz_rounded,
+                  //             size: 18,
+                  //             color: Colors.white,
+                  //           ),
+                  //         ),
+                  //       ),
+                  //     ),
+                  //     ),
+                  //   ),
+                  // )
+                  Text('Savings Rate', style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
                 ],
               ),
               SizedBox(height: 6,),
-              Text(currencyTh.format(thisMonth), style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold),)),
-
-              if (!widget.isCategoryMode) ...[
-                SizedBox(height: 6,),
-                Row(
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                    Icon(arrowIcon, color: arrowColor,),
-                    const SizedBox(width: 5,),
-                    Text(
-                      isPercentView 
-                      ? "${percentText} From Last Month"
-                      : "${isIncrease ? '+ ' : '- '}${currencyTh.format((thisMonth * percentChange.abs()) / 100)} From Last Month",
-                    style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 15, color: Colors.white.withOpacity(0.8)),)),
-                  ],
-                )
-              ]
+                  Text(currencyTh.format(thisMonth), style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold),)),
+                  Text("95%", style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 25, color: Colors.greenAccent, fontWeight: FontWeight.bold),)),
+                  
+                ],
+              ),
+
+              // if (!widget.isCategoryMode) ...[
+              //   SizedBox(height: 6,),
+              // ]
             ],
           ),
         );

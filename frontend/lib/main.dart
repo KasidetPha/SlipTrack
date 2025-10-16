@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-// import 'package:frontend/pages/category_seeall_page.dart';
+import 'package:frontend/pages/category_detail_page.dart';
+import 'package:frontend/pages/category_seeall_page.dart';
 import 'package:frontend/pages/login_page.dart';
+import 'package:frontend/pages/scan_page.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'widgets/bottom_nav_page.dart';
@@ -23,19 +25,19 @@ class MyApp extends StatelessWidget {
         fontFamily: GoogleFonts.prompt().fontFamily,
         useMaterial3: true
       ),
-      // initialRoute: kDebugMode ? '/categories_all' : '/',
+      // initialRoute: '/splashGate',
       // routes: {
-      //   '/': (context) => const SplashGate(),
-      //   '/categories_all': (context) => const CategorySeeall(),
-      //   '/home': (context) => const BottomNavPage(),
-      //   '/login': (context) => const LoginPage()
+      //   '/splashGate': (_) => const SplashGate(),
+      //   '/scan': (_) => const ScanPage()
       // },
+
       home: const SplashGate(), // ====> main
       // home: const BottomNavPage(),
       // home: const BudgetSetting(),
       // home: EditProfilePage()
       // home: ItemsRecentPage()
       // home: CategorySeeall(selectedMonth: DateTime.now().month, selectedYear: DateTime.now().year,)
+      // home: CategoryDetailPage(categoryId: 5, month: 10, year: 2025,categoryName: 'Bills',)
     );
   }
 }

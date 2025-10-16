@@ -169,6 +169,7 @@ class _ExpenseCardState extends State<ExpenseCard> {
         final percentText = "${percentChange.abs().toStringAsFixed(2)}%";
 
         return InkWell(
+          borderRadius: BorderRadius.circular(16),
           onTap: () {
             setState(() {
               isPercentView = !isPercentView;
@@ -189,30 +190,53 @@ class _ExpenseCardState extends State<ExpenseCard> {
                 )
               ]
             ),
-            child: Column(
-              // mainAxisAlignment: MainAxisAlignment.start,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  // mainAxisAlignment: MainAxisAlignment.start,
-                  children: [
-                    Icon(arrowIcon, color: arrowColor,size: 25,),
-                    SizedBox(width: 6,),
-                    Text("Expenses", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
-                  ],
-                ),
-                SizedBox(height: 6,),
-                Text("${currencyTh.format(thisMonth)}", style: GoogleFonts.prompt(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold),),
-                SizedBox(height: 2,),
-                
-                Text(
-                  isPercentView 
-                  ? "$sign$percentText vs last month" 
-                  : "$sign${currencyTh.format((thisMonth * percentChange.abs()) / 100)} vs last month", 
-                  style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),
-                )
-              ],
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: EdgeInsets.only(right: 16),
+                          child: Icon(
+                            Icons.touch_app_rounded,
+                            size: 96,
+                            color: Colors.white.withOpacity(0.12),
+                          ),
+                        ),
+                      ),
+                    )
+                  ),
+
+                  Column(
+                    // mainAxisAlignment: MainAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        // mainAxisAlignment: MainAxisAlignment.start,
+                        children: [
+                          Icon(arrowIcon, color: arrowColor,size: 25,),
+                          SizedBox(width: 6,),
+                          Text("Expenses", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
+                        ],
+                      ),
+                      SizedBox(height: 6,),
+                      Text("${currencyTh.format(thisMonth)}", style: GoogleFonts.prompt(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold),),
+                      SizedBox(height: 2,),
+                      
+                      Text(
+                        isPercentView 
+                        ? "$sign$percentText vs last month" 
+                        : "$sign${currencyTh.format((thisMonth * percentChange.abs()) / 100)} vs last month", 
+                        style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),
+                      )
+                    ],
+                  ),
+                ],
+              )
             ),
           ),
         );
