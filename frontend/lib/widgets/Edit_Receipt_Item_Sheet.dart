@@ -49,6 +49,7 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
     {'id': 5, 'name': 'Transportation'},
   ];
 
+
   static const _prefKeyPriceMode = 'edit_receipt_price_mode';
 
   Future<void> _loadPriceMode() async {

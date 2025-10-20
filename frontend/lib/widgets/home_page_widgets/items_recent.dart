@@ -69,7 +69,6 @@ class _ItemsRecentState extends State<ItemsRecent> {
         const SnackBar(content: Text('Saved changes'))
       );
     }
-
   }
 
   Future<void> logoutAndRedirect() async {

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/models/category_detail.dart';
+import 'package:frontend/models/receipt_item.dart';
 import 'package:frontend/pages/category_seeall_page.dart';
 import 'package:frontend/pages/login_page.dart';
 import 'package:frontend/services/api_client.dart';
 import 'package:frontend/services/receipt_service.dart';
 import 'package:frontend/utils/category_icon_mapper.dart';
+import 'package:frontend/widgets/Edit_Receipt_Item_Sheet.dart';
 import 'package:frontend/widgets/home_page_widgets/month_year_dropdown.dart';
 import 'package:frontend/widgets/home_page_widgets/summary_card.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -30,7 +31,7 @@ class CategoryDetailPage extends StatefulWidget {
 }
 
 class _CategoryDetailPageState extends State<CategoryDetailPage> {
-  late Future<List<CategoryDetail>> _futureItems;
+  late Future<List<ReceiptItem>> _futureItems;
   int? month;
   int? year;
 
@@ -66,9 +67,8 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
       (route) => false
     );
   }
-  
 
-  Future<List<CategoryDetail>> _load() async {
+  Future<List<ReceiptItem>> _load() async {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token') ?? '';
 
@@ -80,7 +80,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
     ApiClient().setToken(token);
 
     try {
-      final items = await ReceiptService().fetchCategoryItems(
+      final items = await ReceiptService().fetchReceiptItemsByCategory(
         categoryId: widget.categoryId, 
         month: month, 
         year: year
@@ -92,6 +92,32 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
         return [];
       }
       rethrow;
+    }
+  }
+
+  Future<void> _openEditModal(ReceiptItem item) async {
+    final bool? updated = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: EditReceiptItemSheet(item: item),
+      )
+    );
+
+    if (!mounted) return;
+    if (updated == true) {
+      setState(() {
+        _futureItems = _load();
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Saved changes'))
+      );
     }
   }
 
@@ -128,25 +154,34 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
           children: [
             Row(
               children: [
-                InkWell(
-                  onTap: () {
-                    // Navigator.pop(context);
-                    Navigator.push(context, MaterialPageRoute(builder: (ctx) => CategorySeeall(selectedMonth: safeMonth, selectedYear: safeYear)));
-                  },
-                  child: CircleAvatar(
-                    backgroundColor: Colors.white.withOpacity(0.2),
-                    child: Icon(Icons.arrow_back_rounded, color: Colors.white, size: 24,),
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: InkWell(
+                    onTap: () {
+                      Navigator.pop(context);
+                      // Navigator.push(context, MaterialPageRoute(builder: (ctx) => CategorySeeall(selectedMonth: safeMonth, selectedYear: safeYear)));
+                    },
+                    child: CircleAvatar(
+                      backgroundColor: Colors.white.withOpacity(0.2),
+                      child: Icon(Icons.arrow_back_rounded, color: Colors.white, size: 24,),
+                    ),
                   ),
                 ),
                 Expanded(
                   child: Center(
-                    child: Text("${widget.categoryName} Details", 
+                    child: Text("${widget.categoryName} Details",
+                      textAlign: TextAlign.center, 
                       style: GoogleFonts.prompt(fontSize: 26, 
                       fontWeight: FontWeight.bold, 
                       color: Colors.white),
                     )
                   )
                 ),
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                )
               ],
             ),
             SizedBox(height: 24),
@@ -174,7 +209,7 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
           });
           await _futureItems;
         },
-        child: FutureBuilder<List<CategoryDetail>>(
+        child: FutureBuilder<List<ReceiptItem>>(
           future: _futureItems, 
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -229,14 +264,17 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                         separatorBuilder: (_, _) => const SizedBox(height: 12,),
                         itemBuilder: (context, index) {
                           final item = items[index];
+                          print("${widget.categoryId}");
+                          print("${item.category_id}");
                           return _TransactionRow(
-                            categoryId: widget.categoryId,
-                            title: item.itemName ?? '-', 
-                            subtitle: item.quantity != null ? 'x${item.quantity}' : "", 
-                            qty: item.totalPrice ?? 0,
+                            categoryId: item.category_id,
+                            title: item.item_name, 
+                            // subtitle: , 
+                            qtyLabel: 'x${item.quantity}',
+                            amount: item.total_price,
                             currency: _currencyTh,
                             date: item.receiptDate,
-                            onTap: () {}
+                            onTap: () => _openEditModal(item)
                           );
                         },
                       )
@@ -255,8 +293,8 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
 class _TransactionRow extends StatelessWidget {
   final int categoryId;
   final String title;
-  final String subtitle;
-  final num qty;
+  final String qtyLabel;
+  final num amount;
   final NumberFormat currency;
   final VoidCallback? onTap;
   final DateTime? date;
@@ -265,8 +303,8 @@ class _TransactionRow extends StatelessWidget {
     super.key,
     required this.categoryId,
     required this.title,
-    required this.subtitle,
-    required this.qty,
+    required this.qtyLabel,
+    required this.amount,
     required this.currency,
     required this.onTap,
     required this.date,
@@ -306,7 +344,7 @@ class _TransactionRow extends StatelessWidget {
                           style: GoogleFonts.prompt(
                             fontWeight: FontWeight.bold)),
                       const SizedBox(width: 6),
-                      Text(subtitle,
+                      Text(qtyLabel,
                         style: GoogleFonts.prompt(fontWeight: FontWeight.w500, color: Colors.grey)),
                     ]),
                     Text(dateLabel,
@@ -318,7 +356,7 @@ class _TransactionRow extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    '-${currency.format(qty)}',
+                    '-${currency.format(amount)}',
                     style: GoogleFonts.prompt(
                       color: Colors.red,
                       fontWeight: FontWeight.bold,

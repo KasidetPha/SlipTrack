@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/widgets/add_page_widgets/add_body.dart';
-import 'package:frontend/widgets/add_page_widgets/add_header.dart';
+import 'package:frontend/widgets/add_expense_page_widgets/add_body.dart';
+import 'package:frontend/widgets/add_expense_page_widgets/add_header.dart';
 // import 'package:google_fonts/google_fonts.dart';
 
-class AddPage extends StatelessWidget {
-  const AddPage({super.key});
+class AddExpensePage extends StatelessWidget {
+  const AddExpensePage({super.key});
 
   @override
   Widget build(BuildContext context) {

@@ -4,6 +4,7 @@ import 'package:frontend/pages/category_seeall_page.dart';
 import 'package:frontend/pages/login_page.dart';
 import 'package:frontend/pages/scan_page.dart';
 import 'package:frontend/services/auth_service.dart';
+import 'package:frontend/widgets/add_entry_sheet.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'widgets/bottom_nav_page.dart';
 
@@ -32,6 +33,8 @@ class MyApp extends StatelessWidget {
       // },
 
       home: const SplashGate(), // ====> main
+      // home: const ScanPage(),
+      // home: const _AddEntrySheet(),
       // home: const BottomNavPage(),
       // home: const BudgetSetting(),
       // home: EditProfilePage()

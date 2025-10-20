@@ -43,7 +43,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-
+  AppLanguage _lang = AppLanguage.th;
   final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -51,10 +51,20 @@ class _HomePageState extends State<HomePage> {
         displayName: 'kasidet', 
         email: 'Kasidet@gmail.com', 
         balance: 12000,
-        onScanReceipt: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanPage()))
+        onScanReceipt: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanPage())),
+        language: _lang,
+        onLanguageChanged: (v) {
+          setState(() => _lang = v); // ตอนนี้แค่ UI เปลี่ยนปุ่ม
+          // ภายหลังค่อยผูกกับ l10n / setLocale() ของแอป
+        },
       ),
       body: SingleChildScrollView(
-        // padding: const EdgeInsets.only(bottom: 76),
+        padding: EdgeInsets.only(
+          bottom: 64 +
+            28 +
+            MediaQuery.of(context).viewPadding.bottom + 
+            16,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [

@@ -84,7 +84,7 @@ app.post('/receipt_item/categories', authenticateToken, async (req,res) => {
     // const finalYear = year || (new Date().getFullYear());
 
     const finalMonth = month || (now.getMonth() + 1);
-    const finalYear = year || now.getFullYearyear();
+    const finalYear = year || now.getFullYear();
 
     // let prevMonth = finalMonth - 1;
     // let prevYear = finalYear;
@@ -336,30 +336,115 @@ app.post('/categories/:categoryId/items', authenticateToken, async (req, res) =>
   try {
     const userId = req.user.id;
     const categoryId = Number.parseInt(req.params.categoryId, 10);
-    const {month, year} = req.body;
-    if (!Number.isFinite(categoryId)) return res.status(400).json({message: 'invalid categoryId'});
+    let { month, year } = req.body;
+
+    if (!Number.isFinite(categoryId)) {
+      return res.status(400).json({ message: 'invalid categoryId' });
+    }
+
+    // fallback เดือน/ปีปัจจุบัน ถ้าไม่ส่งมา
+    const now = new Date();
+    month = Number(month) || (now.getMonth() + 1);
+    year  = Number(year)  || now.getFullYear();
 
     const [rows] = await db.query(`
-      SELECT ri.item_name, re.receipt_date, ri.quantity, ri.total_price
-      FROM categories c
-      JOIN receipt_items ri ON ri.category_id = c.category_id
-      JOIN receipts re      ON re.receipt_id  = ri.receipt_id
-      WHERE c.category_id = ?
-        AND re.user_id    = ?
+      SELECT 
+        ri.item_id       AS item_id,
+        ri.item_name     AS item_name,
+        ri.quantity      AS quantity,
+        ri.total_price   AS total_price,
+        ri.category_id   AS category_id,
+        re.receipt_date  AS receipt_date
+      FROM receipt_items ri
+      JOIN receipts     re ON re.receipt_id  = ri.receipt_id
+      WHERE ri.category_id = ?
+        AND re.user_id     = ?
         AND MONTH(re.receipt_date) = ?
-        AND YEAR(re.receipt_date) = ?
-      ORDER BY re.receipt_date DESC, ri.item_name ASC
-      `, [categoryId, userId, month, year]
-    );
+        AND YEAR(re.receipt_date)  = ?
+      ORDER BY re.receipt_date DESC, ri.item_id DESC
+    `, [categoryId, userId, month, year]);
 
-    console.log('GET /categories/:categoryId/items', categoryId, userId, month, year);
-
+    console.log('POST /categories/:categoryId/items', { categoryId, userId, month, year, count: rows.length });
     res.json(rows);
   } catch (err) {
-    console.error('GET /categories/:categoryId/items', err);
-    res.status(500).json({message: 'Internal server error'});
+    console.error('POST /categories/:categoryId/items error:', err);
+    res.status(500).json({ message: 'Internal server error' });
   }
-})
+});
+
+// app.put('/receipt_item/:id', authenticateToken, async (req, res) => {
+//   const conn = await db.getConnection();
+//   try {
+//     const userId = req.user?.id;
+//     const id = Number(req.params.id);
+
+//     let { item_name, quantity, total_price, receipt_date, category_id } = req.body;
+
+//     if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+//     if (!Number.isFinite(id)) return res.status(400).json({ message: 'Missing item id' });
+
+//     // normalize types
+//     quantity    = Number(quantity);
+//     total_price = Number(total_price);
+//     category_id = Number(category_id);
+
+//     if (
+//       typeof item_name !== 'string' ||
+//       !Number.isFinite(quantity) ||
+//       !Number.isFinite(total_price) ||
+//       !Number.isFinite(category_id)
+//     ) {
+//       return res.status(400).json({ message: 'Invalid or missing fields' });
+//     }
+
+//     await conn.beginTransaction();
+
+//     const [[owner]] = await conn.query(`
+//       SELECT ri.receipt_id AS rid
+//       FROM receipt_items ri
+//       JOIN receipts     re ON re.receipt_id = ri.receipt_id
+//       WHERE ri.item_id = ? AND re.user_id = ?
+//       FOR UPDATE
+//     `, [id, userId]);
+
+//     if (!owner) {
+//       await conn.rollback();
+//       return res.status(404).json({ message: 'Item not found' });
+//     }
+
+//     await conn.query(`
+//       UPDATE receipt_items
+//       SET item_name = ?, quantity = ?, total_price = ?, category_id = ?
+//       WHERE item_id = ?
+//     `, [item_name, quantity, total_price, category_id, id]);
+
+//     if (receipt_date) {
+//       await conn.query(`
+//         UPDATE receipts SET receipt_date = ? WHERE receipt_id = ?
+//       `, [receipt_date, owner.rid]);
+//     }
+
+//     const [[row]] = await conn.query(`
+//       SELECT 
+//         ri.item_id, ri.item_name, ri.quantity, ri.total_price, ri.category_id,
+//         re.receipt_date
+//       FROM receipt_items ri
+//       JOIN receipts re ON re.receipt_id = ri.receipt_id
+//       WHERE ri.item_id = ?
+//     `, [id]);
+
+//     await conn.commit();
+//     res.json(row || { ok: true });
+//   } catch (err) {
+//     await conn.rollback();
+//     console.log('PUT /receipt_item/:id error:', err);
+//     res.status(500).json({ message: 'Internal server error', error: err.message });
+//   } finally {
+//     conn.release();
+//   }
+// });
+
+
 
 // Start server
 app.listen(3000, () => {

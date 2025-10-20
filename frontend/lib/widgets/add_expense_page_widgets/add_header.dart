@@ -33,7 +33,7 @@ class AddHeader extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Text("Add Expense", style: GoogleFonts.prompt(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1))
+          Text("Add Expense", style: GoogleFonts.prompt(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: 1))
         ],
       )
     );

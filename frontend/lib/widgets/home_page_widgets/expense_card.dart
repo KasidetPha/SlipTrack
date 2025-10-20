@@ -227,11 +227,16 @@ class _ExpenseCardState extends State<ExpenseCard> {
                       Text("${currencyTh.format(thisMonth)}", style: GoogleFonts.prompt(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold),),
                       SizedBox(height: 2,),
                       
-                      Text(
-                        isPercentView 
-                        ? "$sign$percentText vs last month" 
-                        : "$sign${currencyTh.format((thisMonth * percentChange.abs()) / 100)} vs last month", 
-                        style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),
+                      Row(
+                        children: [
+                          Text(
+                            isPercentView 
+                            ? "$sign$percentText " 
+                            : "$sign${currencyTh.format((thisMonth * percentChange.abs()) / 100)} ", 
+                            style: GoogleFonts.prompt(color: arrowColor, fontWeight: FontWeight.w500),
+                          ),
+                          Text("vs last month", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
+                        ],
                       )
                     ],
                   ),

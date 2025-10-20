@@ -8,6 +8,7 @@ import 'package:frontend/models/monthly_total.dart';
 import 'package:frontend/models/receipt_item.dart';
 import 'package:frontend/models/stats_summary.dart';
 import 'package:frontend/services/api_client.dart';
+import 'package:intl/intl.dart';
 
 class ApiException implements Exception {
   final int? statusCode;
@@ -264,11 +265,17 @@ class ReceiptService {
     required int categoryId,
     CancelToken? cancelToken,
   }) async {
+
+    final dateStr = DateFormat('yyyy-MM-dd').format(receiptDate);
+
+    final price2 = double.parse(totalPrice.toStringAsFixed(2));
+
+    
     final body = {
       'item_name': itemName,
       'quantity': quantity,
-      'total_price': totalPrice,
-      'receipt_date': receiptDate.toIso8601String(),
+      'total_price': price2,
+      'receipt_date': dateStr,
       'category_id': categoryId,
     };
 
@@ -300,8 +307,7 @@ class ReceiptService {
   }
 
   // เมื่อเลือก หมวดหมู่ใน category seeall แล้วจะแสดง หมวดหมู่ของรายการนั้นๆ ทั้งหมด
-
-  Future<List<CategoryDetail>> fetchCategoryItems({
+  Future<List<ReceiptItem>> fetchReceiptItemsByCategory({
     required int categoryId,
     int? month,
     int? year,
@@ -338,7 +344,7 @@ class ReceiptService {
         return list
         .whereType<Map>()
         .cast<Map<String, dynamic>>()
-        .map(CategoryDetail.fromJson)
+        .map(ReceiptItem.fromJson)
         .toList();
       }
 
