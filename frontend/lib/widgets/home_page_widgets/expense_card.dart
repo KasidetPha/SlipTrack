@@ -66,7 +66,9 @@ class _ExpenseCardState extends State<ExpenseCard> {
     ApiClient().clearToken();
 
     if (!mounted) return;
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginPage()));
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (_) => false);
   }
 
   Future<StatsSummary> _load(CancelToken cancelToken) async {
@@ -127,7 +129,7 @@ class _ExpenseCardState extends State<ExpenseCard> {
 
             final sc = err.response?.statusCode;
             msg = err.message ?? msg;
-            if (sc == 401 || sc == 403) {
+            if ((sc == 401 || sc == 403) && !_loggingOut) {
               WidgetsBinding.instance.addPostFrameCallback((_) => _logoutAndRedirect());
               msg = 'หมดสิทธิ์การใช้งาน โปรดเข้าสู่ระบบใหม่';
             }
@@ -154,7 +156,7 @@ class _ExpenseCardState extends State<ExpenseCard> {
           );
         }
 
-        final thisMonth = summary.thisMonth ?? 0.0;
+        final double thisMonth = summary.thisMonth ?? 0.0;
         double percentChange = summary.percentChange ?? 0.0;
 
         if (percentChange.isNaN || percentChange.isInfinite) percentChange = 0.0;
@@ -166,7 +168,19 @@ class _ExpenseCardState extends State<ExpenseCard> {
         final arrowColor = isZero ? Colors.grey : (isIncrease ? Colors.red[300] : Colors.green[300]);
 
         final String sign = isZero ? '' : (isIncrease ? '+' : '-');
-        final percentText = "${percentChange.abs().toStringAsFixed(2)}%";
+        final percentText = "${percentChange.abs().toStringAsFixed(1)}%";
+
+        double? lastMonthEstimated;
+        final double ratio = 1 + (percentChange / 100.0);
+        if (ratio.abs() > 1e-9) {
+          lastMonthEstimated = thisMonth / ratio;
+        } else {
+          lastMonthEstimated = null;
+        }
+
+        final double amountChange = (lastMonthEstimated == null)
+          ? 0.0
+          : (lastMonthEstimated * percentChange.abs() / 100.0);
 
         return InkWell(
           borderRadius: BorderRadius.circular(16),
@@ -232,10 +246,10 @@ class _ExpenseCardState extends State<ExpenseCard> {
                           Text(
                             isPercentView 
                             ? "$sign$percentText " 
-                            : "$sign${currencyTh.format((thisMonth * percentChange.abs()) / 100)} ", 
+                            : "$sign${currencyTh.format(amountChange)} ", 
                             style: GoogleFonts.prompt(color: arrowColor, fontWeight: FontWeight.w500),
                           ),
-                          Text("vs last month", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
+                          Text("vs last mo.", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
                         ],
                       )
                     ],

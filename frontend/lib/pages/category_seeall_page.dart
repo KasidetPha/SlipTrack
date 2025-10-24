@@ -4,7 +4,7 @@ import 'package:frontend/pages/category_detail_page.dart';
 import 'package:frontend/services/receipt_service.dart';
 import 'package:frontend/utils/category_icon_mapper.dart';
 import 'package:frontend/widgets/bottom_nav_page.dart';
-import 'package:frontend/widgets/home_page_widgets/month_year_dropdown.dart';
+import 'package:frontend/widgets/month_year_dropdown.dart';
 import 'package:frontend/widgets/home_page_widgets/summary_card.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/add_expense_page.dart';
 import 'package:frontend/pages/category_detail_page.dart';
 import 'package:frontend/pages/category_seeall_page.dart';
 import 'package:frontend/pages/login_page.dart';
@@ -34,7 +35,7 @@ class MyApp extends StatelessWidget {
 
       home: const SplashGate(), // ====> main
       // home: const ScanPage(),
-      // home: const _AddEntrySheet(),
+      // home: const AddExpensePage(),
       // home: const BottomNavPage(),
       // home: const BudgetSetting(),
       // home: EditProfilePage()

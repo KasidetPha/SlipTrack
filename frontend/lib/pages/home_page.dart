@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:frontend/pages/category_seeall_page.dart';
 import 'package:frontend/pages/scan_page.dart';
 import 'package:frontend/widgets/drawer/sliptrack_drawer.dart';
+import 'package:frontend/widgets/filter_month_year.dart';
 import 'package:frontend/widgets/home_page_widgets/expense_card.dart';
 import 'package:frontend/widgets/home_page_widgets/home_header.dart';
 import 'package:frontend/widgets/home_page_widgets/income_card.dart';
 import 'package:frontend/widgets/home_page_widgets/items_recent.dart';
-import 'package:frontend/widgets/home_page_widgets/month_year_dropdown.dart';
+import 'package:frontend/widgets/month_year_dropdown.dart';
 import 'package:frontend/widgets/home_page_widgets/most_category.dart';
 import 'package:frontend/widgets/home_page_widgets/summary_card.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -26,6 +27,8 @@ class _HomePageState extends State<HomePage> {
   Key itemsRecentKey = UniqueKey(); // ใช้เพื่อ force rebuild ItemsRecent
   bool _hasCategoryData = false;
 
+  AppLanguage _lang = AppLanguage.th;
+
   void onMonthYearChanged(int month, int year) {
     setState(() {
       selectedMonth = month;
@@ -40,10 +43,8 @@ class _HomePageState extends State<HomePage> {
   }
 
 
-
   @override
   Widget build(BuildContext context) {
-  AppLanguage _lang = AppLanguage.th;
   final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -59,12 +60,7 @@ class _HomePageState extends State<HomePage> {
         },
       ),
       body: SingleChildScrollView(
-        padding: EdgeInsets.only(
-          bottom: 64 +
-            28 +
-            MediaQuery.of(context).viewPadding.bottom + 
-            16,
-        ),
+        padding: EdgeInsets.only(bottom: 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -97,7 +93,12 @@ class _HomePageState extends State<HomePage> {
                 children: [
                   HomeHeader(),
                   SizedBox(height: 24),
-                  MonthYearDropdown(
+                  // MonthYearDropdown(
+                  //   onMonthYearChanged: onMonthYearChanged,
+                  // ),
+                  FilterMonthYear(
+                    initialMonth: selectedMonth,
+                    initialYear: selectedYear,
                     onMonthYearChanged: onMonthYearChanged,
                   ),
                   SizedBox(height: 24),
@@ -111,7 +112,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                       const SizedBox(width: 16),
                       Expanded(
-                        child: ExpenseCard(                          
+                        child: ExpenseCard(
                           selectedMonth: selectedMonth,
                           selectedYear: selectedYear,
                         )

@@ -226,8 +226,16 @@ class _CategoryCard extends StatelessWidget {
       height: 140,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
+        border: Border.all(color: Colors.grey.withOpacity(0.01)),
         color: bgColor, 
-        borderRadius: BorderRadius.circular(12)
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.01),
+            blurRadius: 2,
+            offset: const Offset(0,1)
+          )
+        ]
       ), child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,

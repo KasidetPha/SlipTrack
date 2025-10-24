@@ -49,7 +49,7 @@ class _BottomNavPageState extends State<BottomNavPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBody: true,
+      extendBody: false,
       body: _pages[_currentIndex],
 
       floatingActionButton: SizedBox(
