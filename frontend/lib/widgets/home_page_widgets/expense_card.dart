@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:frontend/models/monthly_kind.dart';
 import 'package:frontend/models/stats_summary.dart';
 import 'package:frontend/pages/login_page.dart';
 import 'package:frontend/services/api_client.dart';
@@ -91,9 +92,10 @@ class _ExpenseCardState extends State<ExpenseCard> {
 
     ApiClient().setToken(token);
 
-    return ReceiptService().getMonthlyComparison(
+    return ReceiptService().GetMonthlyComparison(
       month: widget.selectedMonth,
       year: widget.selectedYear,
+      type: MonthlyKind.expense,
       cancelToken: cancelToken
     );
   }
@@ -137,7 +139,7 @@ class _ExpenseCardState extends State<ExpenseCard> {
             msg = err.toString();
           }
           // ignore : avoid_print
-          print('SummaryCard err: $err');
+          print('Expense card err: $err');
 
           return SizedBox(
             height: 150,

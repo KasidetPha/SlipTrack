@@ -4,6 +4,7 @@ import 'package:frontend/models/category_detail.dart';
 import 'package:frontend/models/category_summary.dart';
 import 'package:frontend/models/category_total.dart';
 import 'package:frontend/models/first_Username_icon.dart';
+import 'package:frontend/models/monthly_kind.dart';
 import 'package:frontend/models/monthly_total.dart';
 import 'package:frontend/models/receipt_item.dart';
 import 'package:frontend/models/stats_summary.dart';
@@ -63,15 +64,16 @@ class ReceiptService {
   }
 
   // ดึงยอดรวมเดือนเดียว
-  Future<MonthlyTotal> getMonthlyTotal({
+  Future<MonthlyTotal> GetMonthlyTotal({
     required int month,
     required int year,
+    MonthlyKind type = MonthlyKind.net,
     CancelToken? cancelToken,
   }) async {
     try {
       final res = await _dio.post(
         '/monthlyTotal',
-        data: {'month': month, 'year': year},
+        data: {'month': month, 'year': year, 'type': type.wire},
         cancelToken: cancelToken
       );
 
@@ -96,16 +98,17 @@ class ReceiptService {
     }
   }
 
-  Future<StatsSummary> getMonthlyComparison({
+  Future<StatsSummary> GetMonthlyComparison({
     required int month,
     required int year,
+    MonthlyKind type = MonthlyKind.net,
     CancelToken? cancelToken,
   }) async {
     final prev = _previousMonth(month, year);
 
     final results = await Future.wait([
-      getMonthlyTotal(month: month, year: year, cancelToken: cancelToken),
-      getMonthlyTotal(month: prev.$1, year: prev.$2, cancelToken: cancelToken),
+      GetMonthlyTotal(month: month, year: year, type: type, cancelToken: cancelToken),
+      GetMonthlyTotal(month: prev.$1, year: prev.$2,type: type, cancelToken: cancelToken),
     ]);
 
     final thisMonth = results[0].amount;

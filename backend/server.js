@@ -116,24 +116,74 @@ app.post('/receipt_item/categories', authenticateToken, async (req,res) => {
   }
 });
 
+// app.post('/expense/monthlyTotal', authenticateToken, async (req, res) => {
+//   try {
+//     const userId = req.user?.id;
+
+//     const {month, year} = req.body;
+
+//     const [rows] = await db.query(`
+//       SELECT COALESCE(SUM(total_amount), 0) as total_amount FROM receipts
+//       WHERE user_id = ? AND EXTRACT(MONTH FROM receipt_date) = ? AND EXTRACT(YEAR FROM receipt_date) = ?;
+//       `, [userId, month, year]);
+
+//     const total = rows?.[0].total_amount ?? 0;
+
+//     res.json({total});
+
+//     console.log('Fetch: /expense/monthlyTotal: ', month, year);
+//   } catch (err) {
+//     res.status(500).json({ message: err.message})
+//   }
+// })
+
 app.post('/monthlyTotal', authenticateToken, async (req, res) => {
   try {
     const userId = req.user?.id;
+    const {month, year, type = 'net'} = req.body ?? {};
 
-    const {month, year} = req.body;
+    if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(year)) {
+      return res.status(400).json({ message: 'month (1-12) และ year (int) จำเป็นต้องส่งมา'})
+    }
 
     const [rows] = await db.query(`
-      SELECT COALESCE(SUM(total_amount), 0) as total_amount FROM receipts
-      WHERE user_id = ? AND EXTRACT(MONTH FROM receipt_date) = ? AND EXTRACT(YEAR FROM receipt_date) = ?;
-      `, [userId, month, year])
+      SELECT
+      (SELECT COALESCE(SUM(i.amount), 0)
+      FROM incomes i
+      WHERE i.user_id = ?
+        AND MONTH(i.income_date) = ?
+        AND YEAR(i.income_date)  = ?) AS income_total_amount,
+      (SELECT COALESCE(SUM(r.total_amount), 0)
+      FROM receipts r
+      WHERE r.user_id = ?
+        AND MONTH(r.receipt_date) = ?
+        AND YEAR(r.receipt_date)  = ?) AS expense_total_amount;
+    `, [userId, month, year, userId, month, year]);
 
-    const total = rows?.[0].total_amount ?? 0;
+    const {income_total_amount = 0, expense_total_amount = 0} = rows?.[0] || {};
+    const net_total = Number(income_total_amount) - Number(expense_total_amount);
 
-    res.json({total});
+    let amount = net_total;
+    if (type == 'income') amount = Number(income_total_amount);
+    if (type == 'expense') amount = Number(expense_total_amount);
 
-    console.log('Fetch /monthlyTotal: ', month, year);
+    res.json({
+      month,
+      year,
+      amount,
+      type,
+      breakdown: {
+        income_total_amount: Number(income_total_amount),
+        expense_total_amount: Number(expense_total_amount),
+        net_total: Number(net_total),
+      }
+    });
+
+    console.log(`Fetch: /monthlyTotal =>  type: ${type}, amount: ${amount}`);
+    // console.log('Fetch: /monthlyTotal')
   } catch (err) {
-    res.status(500).json({ message: err.message})
+    res.status(500).json({message: err.message});
   }
 })
 

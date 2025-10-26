@@ -95,7 +95,7 @@ class _SummaryCardState extends State<SummaryCard> {
 
     ApiClient().setToken(token);
 
-    return ReceiptService().getMonthlyComparison(
+    return ReceiptService().GetMonthlyComparison(
       month: widget.selectedMonth,
       year: widget.selectedYear,
       cancelToken: cancelToken
