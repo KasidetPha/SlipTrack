@@ -5,12 +5,12 @@
       "path": "frontend"
     },
     {
-      "name": "backend",
-      "path": "backend"
+      "name": "backend_nodeJS",
+      "path": "backend_nodeJS"
     },
     {
-      "name": "backend_python",
-      "path": "backend_python"
+      "name": "backend_fastAPI",
+      "path": "backend_fastAPI"
     }
   ],
   "settings": {}
