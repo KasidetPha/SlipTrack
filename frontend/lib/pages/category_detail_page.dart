@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/models/receipt_item.dart';
-import 'package:frontend/pages/category_seeall_page.dart';
+import 'package:frontend/pages/category_see_all_page.dart';
 import 'package:frontend/pages/login_page.dart';
 import 'package:frontend/services/api_client.dart';
 import 'package:frontend/services/receipt_service.dart';

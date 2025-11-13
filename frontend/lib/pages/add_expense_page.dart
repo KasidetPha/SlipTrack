@@ -19,9 +19,9 @@ class AddExpensePage extends StatelessWidget {
         title: const Text('Add Expense'),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
-            borderRadius: BorderRadius.vertical(
-              bottom: Radius.circular(30)
-            ),
+            // borderRadius: BorderRadius.vertical(
+            //   bottom: Radius.circular(30)
+            // ),
             gradient: LinearGradient(
               colors: [Color(0xFFFF5E62), Color(0xFFFB2966)],
               begin: Alignment.topLeft,

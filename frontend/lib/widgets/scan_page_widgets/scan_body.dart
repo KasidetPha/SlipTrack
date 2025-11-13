@@ -14,16 +14,16 @@ class _ScanBodyState extends State<ScanBody> {
   // ====== Mock data: เรียกใช้กับ modal (UI เท่านั้น) ======
   final _items = <ReceiptScanResult>[
     ReceiptScanResult(
-      title: 'ชำระค่าไฟฟ้า MEA กันยายน 2568',
-      icon: Icons.event, iconBg: const Color(0xFF10B981),
-      date: DateTime(2025, 10, 1),
-      qty: 1, amount: -320.00,
+      title: 'H FHขนมปังชนิดแผ่น',
+      icon: Icons.restaurant, iconBg: const Color(0xFFE67E22),
+      date: DateTime(2025, 10, 19),
+      qty: 1, amount: -40.00,
     ),
     ReceiptScanResult(
-      title: 'เติมเงินบัตรแรบบิท BTS',
-      icon: Icons.directions_subway_filled_rounded, iconBg: const Color(0xFF8B5CF6),
-      date: DateTime(2025, 10, 1),
-      qty: 1, amount: -100.00,
+      title: 'H นมถั่วเหลือง UHT',
+      icon: Icons.restaurant, iconBg: const Color(0xFFE67E22),
+      date: DateTime(2025, 10, 19),
+      qty: 1, amount: -15.00,
     ),
   ];
 
@@ -43,100 +43,107 @@ class _ScanBodyState extends State<ScanBody> {
             ),
             child: Container(
               decoration: BoxDecoration(
-                color: Colors.grey.withOpacity(0.1),
+                color: Colors.grey.withOpacity(0.7),
                 borderRadius: BorderRadius.circular(12),
               ),
-              padding: const EdgeInsets.symmetric(vertical: 48),
-              width: double.infinity,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(15),
-                    decoration: BoxDecoration(
-                      color: Colors.blue.shade100,
-                      borderRadius: BorderRadius.circular(50),
-                    ),
-                    child: const Icon(
-                      Icons.photo_camera_outlined,
-                      color: Color(0xFF2563EB),
-                      size: 48,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    "Photo or Select receipt",
-                    style: GoogleFonts.prompt(
-                        fontSize: 20, fontWeight: FontWeight.w700, color: Colors.black87),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    "Take a clear photo of the slip for best results.",
-                    style: GoogleFonts.prompt(
-                        fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black.withOpacity(0.5)),
-                  ),
-                  const SizedBox(height: 24),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: InkWell(
-                      onTap: () {
-                        // TODO: เรียกกล้องจริง
-                        _showScanResultSheet(context, _items);
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.all(12),
-                        width: double.infinity,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.photo_camera_outlined, color: Colors.white, size: 24),
-                            const SizedBox(width: 12),
-                            Text("Photo",
-                                style: GoogleFonts.prompt(
-                                    color: Colors.white, fontWeight: FontWeight.w500, fontSize: 15)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: InkWell(
-                      onTap: () {
-                        // TODO: เปิดแกลเลอรี่จริง
-                        _showScanResultSheet(context, _items);
-                      },
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.grey.shade300),
-                        ),
-                        alignment: Alignment.center,
-                        padding: const EdgeInsets.all(12),
-                        width: double.infinity,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Icon(Icons.image, color: Colors.black, size: 24),
-                            const SizedBox(width: 12),
-                            Text("Select from Gallery",
-                                style: GoogleFonts.prompt(
-                                    color: Colors.black87, fontWeight: FontWeight.w500, fontSize: 15)),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              height: 300,
             ),
+            // child: Container(
+            //   decoration: BoxDecoration(
+            //     color: Colors.grey.withOpacity(0.1),
+            //     borderRadius: BorderRadius.circular(12),
+            //   ),
+            //   padding: const EdgeInsets.symmetric(vertical: 48),
+            //   width: double.infinity,
+            //   child: Column(
+            //     crossAxisAlignment: CrossAxisAlignment.center,
+            //     children: [
+            //       Container(
+            //         padding: const EdgeInsets.all(15),
+            //         decoration: BoxDecoration(
+            //           color: Colors.blue.shade100,
+            //           borderRadius: BorderRadius.circular(50),
+            //         ),
+            //         child: const Icon(
+            //           Icons.photo_camera_outlined,
+            //           color: Color(0xFF2563EB),
+            //           size: 48,
+            //         ),
+            //       ),
+            //       const SizedBox(height: 24),
+            //       Text(
+            //         "Photo or Select receipt",
+            //         style: GoogleFonts.prompt(
+            //             fontSize: 20, fontWeight: FontWeight.w700, color: Colors.black87),
+            //       ),
+            //       const SizedBox(height: 12),
+            //       Text(
+            //         "Take a clear photo of the slip for best results.",
+            //         style: GoogleFonts.prompt(
+            //             fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black.withOpacity(0.5)),
+            //       ),
+            //       const SizedBox(height: 24),
+            //       Padding(
+            //         padding: const EdgeInsets.symmetric(horizontal: 24),
+            //         child: InkWell(
+            //           onTap: () {
+            //             // TODO: เรียกกล้องจริง
+            //             _showScanResultSheet(context, _items);
+            //           },
+            //           child: Container(
+            //             decoration: BoxDecoration(
+            //               color: const Color(0xFF2563EB),
+            //               borderRadius: BorderRadius.circular(12),
+            //             ),
+            //             alignment: Alignment.center,
+            //             padding: const EdgeInsets.all(12),
+            //             width: double.infinity,
+            //             child: Row(
+            //               mainAxisAlignment: MainAxisAlignment.center,
+            //               children: [
+            //                 const Icon(Icons.photo_camera_outlined, color: Colors.white, size: 24),
+            //                 const SizedBox(width: 12),
+            //                 Text("Photo",
+            //                     style: GoogleFonts.prompt(
+            //                         color: Colors.white, fontWeight: FontWeight.w500, fontSize: 15)),
+            //               ],
+            //             ),
+            //           ),
+            //         ),
+            //       ),
+            //       const SizedBox(height: 12),
+            //       Padding(
+            //         padding: const EdgeInsets.symmetric(horizontal: 24),
+            //         child: InkWell(
+            //           onTap: () {
+            //             // TODO: เปิดแกลเลอรี่จริง
+            //             _showScanResultSheet(context, _items);
+            //           },
+            //           child: Container(
+            //             decoration: BoxDecoration(
+            //               color: Colors.white,
+            //               borderRadius: BorderRadius.circular(12),
+            //               border: Border.all(color: Colors.grey.shade300),
+            //             ),
+            //             alignment: Alignment.center,
+            //             padding: const EdgeInsets.all(12),
+            //             width: double.infinity,
+            //             child: Row(
+            //               mainAxisAlignment: MainAxisAlignment.center,
+            //               children: [
+            //                 const Icon(Icons.image, color: Colors.black, size: 24),
+            //                 const SizedBox(width: 12),
+            //                 Text("Select from Gallery",
+            //                     style: GoogleFonts.prompt(
+            //                         color: Colors.black87, fontWeight: FontWeight.w500, fontSize: 15)),
+            //               ],
+            //             ),
+            //           ),
+            //         ),
+            //       ),
+            //     ],
+            //   ),
+            // ),
           ),
           const SizedBox(height: 24),
           const _Tips(),

@@ -18,9 +18,9 @@ class AddIncomePage extends StatelessWidget {
         title: const Text('Add Income'),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
-            borderRadius: BorderRadius.vertical(
-              bottom: Radius.circular(30)
-            ),
+            // borderRadius: BorderRadius.vertical(
+            //   bottom: Radius.circular(30)
+            // ),
             gradient: LinearGradient(
               colors: [Color(0xFF0CC27E), Color(0xFF24B36B)],
               begin: Alignment.topLeft,

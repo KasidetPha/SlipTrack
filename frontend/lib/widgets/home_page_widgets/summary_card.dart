@@ -244,22 +244,20 @@ class _SummaryCardState extends State<SummaryCard> {
                   //     ),
                   //   ),
                   // )
-                  Text('Savings Rate', style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
+                  // Text('Savings Rate', style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
                 ],
               ),
               SizedBox(height: 6,),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(currencyTh.format(thisMonth), style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold),)),
-                  Text("95%", style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 25, color: Colors.greenAccent, fontWeight: FontWeight.bold),)),
+                  Text(currencyTh.format(thisMonth), style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w700),)),
+                  // Text("95%", style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 22, color: Colors.greenAccent, fontWeight: FontWeight.w700),)),
                   
                 ],
               ),
 
-              // if (!widget.isCategoryMode) ...[
-              //   SizedBox(height: 6,),
-              // ]
+
             ],
           ),
         );

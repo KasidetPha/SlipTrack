@@ -169,14 +169,6 @@ class _MonthYearDropdownState extends State<MonthYearDropdown> {
         borderRadius: BorderRadius.circular(12)
       ),
       contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      // enabledBorder: OutlineInputBorder(
-      //   borderSide: const BorderSide(color: Colors.white, width: 1),
-      //   borderRadius: BorderRadius.circular(12),
-      // ),
-      // focusedBorder: OutlineInputBorder(
-      //   borderSide: const BorderSide(color: Colors.white, width: 1),
-      //   borderRadius: BorderRadius.circular(12),
-      // ),
     );
   }
 }

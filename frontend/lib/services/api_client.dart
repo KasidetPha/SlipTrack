@@ -12,10 +12,16 @@ class ApiEnv {
   // static const baseUrl = 'http://localhost:3000';
 
   static String resolveBaseUrl() {
-    if (kIsWeb) return 'http://localhost:3000';
-    if (Platform.isAndroid) return 'http://10.0.2.2:3000';
-    return 'http://localhost:3000';
+    if (kIsWeb) return 'http://localhost:8000';
+    if (Platform.isAndroid) return 'http://10.0.2.2:8000';
+    return 'http://localhost:8000';
   }
+
+  // static String resolveBaseUrl() {
+  //   if (kIsWeb) return 'http://localhost:3000';
+  //   if (Platform.isAndroid) return 'http://10.0.2.2:3000';
+  //   return 'http://localhost:3000';
+  // }
 
   static const timeout = Duration(seconds: 15);
 }

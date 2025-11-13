@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/pages/add_expense_page.dart';
 import 'package:frontend/pages/category_detail_page.dart';
-import 'package:frontend/pages/category_seeall_page.dart';
+import 'package:frontend/pages/category_see_all_page.dart';
 import 'package:frontend/pages/login_page.dart';
 import 'package:frontend/pages/scan_page.dart';
 import 'package:frontend/services/auth_service.dart';
@@ -22,17 +22,6 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SlipTrack',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        fontFamily: GoogleFonts.prompt().fontFamily,
-        useMaterial3: true
-      ),
-      // initialRoute: '/splashGate',
-      // routes: {
-      //   '/splashGate': (_) => const SplashGate(),
-      //   '/scan': (_) => const ScanPage()
-      // },
-
       home: const SplashGate(), // ====> main
       // home: const ScanPage(),
       // home: const AddExpensePage(),

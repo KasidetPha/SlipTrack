@@ -104,7 +104,7 @@ final List<_Category> _categories = const [
             ),
           ),
           SizedBox(height: 12,),
-          Text("Order Name", style: GoogleFonts.prompt(fontWeight: FontWeight.w700, fontSize: 20)),
+          Text("Source", style: GoogleFonts.prompt(fontWeight: FontWeight.w700, fontSize: 20)),
           SizedBox(height: 12,),
           TextFormField(
             style: GoogleFonts.prompt(),
@@ -189,7 +189,7 @@ final List<_Category> _categories = const [
                 borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
                 borderRadius: BorderRadius.circular(12)
               ),
-              hintText: "What did you spend money on?",
+              hintText: "What is this income for?",
               hintStyle: GoogleFonts.prompt(color: Colors.black.withOpacity(0.4))
             ),
           ),

@@ -140,7 +140,7 @@ async def login(body: LoginBody, db_pool: aiomysql.Pool = Depends(get_db_conn)):
     async with db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             # หา user
-            await cur.execute("SELECT * FROM users WHERE email=%s", (body.email))
+            await cur.execute("SELECT * FROM users WHERE email=%s", (body.email,))
             user = await cur.fetchone()
             if not user:
                 raise HTTPException(status_code=400, detail="User not found")
@@ -433,4 +433,4 @@ async def items_in_category(
             return rows
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)

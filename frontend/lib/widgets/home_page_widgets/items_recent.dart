@@ -145,58 +145,106 @@ class _ItemsRecentState extends State<ItemsRecent> {
                   },
                   child: Container(
                     width: double.infinity,
-                    // height: 78,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.withOpacity(0.2), width: 1.5)
+                      border: Border.all(
+                        color: Colors.grey.withOpacity(0.2),
+                        width: 1.5,
+                      ),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(15),
-                      child: Center(
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          crossAxisAlignment: CrossAxisAlignment.center,
-                          children: [
-                            Row(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
                                 Icon(
-                                  iconForCategoryId(item.category_id), 
+                                  iconForCategoryId(item.category_id),
                                   color: colorForCategoryId(item.category_id),
                                   size: 28,
                                 ),
-                                const SizedBox(width: 15,),
-                                Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Text("${item.item_name} ", style: GoogleFonts.prompt(fontWeight: FontWeight.bold)),
-                                        Text("x${item.quantity}", style: GoogleFonts.prompt(fontWeight: FontWeight.w500, color: Colors.grey),),
-                                      ],
-                                    ),
-                                    Text(DateFormat('dd/MM/yyyy').format(item.receiptDate), style: GoogleFonts.prompt(color: Colors.black.withOpacity(0.5)),)
-                                  ]
+                                const SizedBox(width: 15),
+
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                                        textBaseline: TextBaseline.alphabetic,
+                                        children: [
+                                          Flexible(
+                                            child: Text(
+                                              item.item_name,
+                                              style: GoogleFonts.prompt(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                              ),
+                                              maxLines: 1,                
+                                              overflow: TextOverflow.ellipsis,
+                                              softWrap: true,
+                                            ),
+                                          ),
+                                          Text(
+                                            " x${item.quantity}",
+                                            style: GoogleFonts.prompt(
+                                              fontWeight: FontWeight.w500,
+                                              color: Colors.grey,
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+
+                                      const SizedBox(height: 4),
+
+                                      SizedBox(height: 2,),
+                                      Row(
+                                        children: [
+                                          Text(
+                                            DateFormat('dd/MM/yyyy').format(item.receiptDate),
+                                            style: GoogleFonts.prompt(
+                                              color: Colors.black.withOpacity(0.5),
+                                              fontSize: 13,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ],
+                                  ),
                                 ),
                               ],
                             ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  '-${currencyTh.format(item.total_price)}',
-                                  style: GoogleFonts.prompt(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 18
-                                  ),
+                          ),
+
+                          const SizedBox(width: 12),
+
+                          Column(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                '-${currencyTh.format(item.total_price)}',
+                                style: GoogleFonts.prompt(
+                                  color: Colors.red,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 18,
                                 ),
-                                Icon(Icons.chevron_right_outlined, size: 18, color: Colors.grey,)
-                              ],
-                            )
-                          ],
-                        ),
+                              ),
+                              
+                              const Icon(
+                                Icons.chevron_right_outlined,
+                                size: 18,
+                                color: Colors.grey,
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
                   ),

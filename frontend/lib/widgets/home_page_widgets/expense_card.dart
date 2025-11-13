@@ -27,6 +27,35 @@ class _ExpenseCardState extends State<ExpenseCard> {
 
   final currencyTh = NumberFormat.currency(locale: 'th_TH', symbol: '฿');
 
+  String formatCurrency(num amount, {int decimals = 1}) {
+    final isNeg = amount < 0;
+    double v = amount.abs().toDouble();
+
+    String suffix = '';
+    double divisor = 1;
+
+    if (v >= 1e9) {
+      suffix = 'B';
+      divisor = 1e9;
+    } else if (v >= 1e6) {
+      suffix = 'M';
+      divisor = 1e6;
+    } else if (v >= 1e3) {
+      suffix = 'k';
+      divisor = 1e3;
+    }
+
+    String numberStr;
+    if (suffix.isEmpty) {
+      numberStr = NumberFormat.currency(locale: 'th_TH', symbol: '฿').format(v);
+    } else {
+      final compact = (v / divisor).toStringAsFixed(decimals).replaceAll(RegExp(r'\.?0+$'), '');
+      numberStr = '฿$compact$suffix';
+    }
+
+    return isNeg ? '-$numberStr' : numberStr;
+  }
+
   late Future<StatsSummary> _future;
   CancelToken? _cancelToken;
   bool _loggingOut = false;
@@ -240,7 +269,7 @@ class _ExpenseCardState extends State<ExpenseCard> {
                         ],
                       ),
                       SizedBox(height: 6,),
-                      Text("${currencyTh.format(thisMonth)}", style: GoogleFonts.prompt(fontSize: 25, color: Colors.white, fontWeight: FontWeight.bold),),
+                      Text("${currencyTh.format(thisMonth)}", style: GoogleFonts.prompt(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w700),),
                       SizedBox(height: 2,),
                       
                       Row(
@@ -248,7 +277,7 @@ class _ExpenseCardState extends State<ExpenseCard> {
                           Text(
                             isPercentView 
                             ? "$sign$percentText " 
-                            : "$sign${currencyTh.format(amountChange)} ", 
+                            : "$sign${formatCurrency(amountChange)} ", 
                             style: GoogleFonts.prompt(color: arrowColor, fontWeight: FontWeight.w500),
                           ),
                           Text("vs last mo.", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
