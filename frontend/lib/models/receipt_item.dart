@@ -5,8 +5,21 @@ class ReceiptItem {
   final DateTime receiptDate;
   final int quantity;
   final int category_id;
+  final String entryType;
+  final String? iconName;
+  final String? colorHex;
 
-  ReceiptItem({required this.item_id, required this.item_name, required this.total_price, required this.receiptDate, required this.quantity, required this.category_id});
+  ReceiptItem({
+    required this.item_id, 
+    required this.item_name, 
+    required this.total_price, 
+    required this.receiptDate, 
+    required this.quantity, 
+    required this.category_id,
+    required this.entryType,
+    this.iconName,
+    this.colorHex
+  });
 
   factory ReceiptItem.fromJson(Map<String, dynamic>j) {
     double _d(v) => v is num ? v.toDouble() : double.tryParse('${v}'.replaceAll(",", '')) ?? 0.0;
@@ -16,9 +29,12 @@ class ReceiptItem {
       item_id: _i(j['item_id'] ?? j['id']),
       item_name: j['item_name']?.toString() ?? '', 
       total_price: _d(j['total_price']),
-      receiptDate: _dt(j['receipt_date']),
+      receiptDate: _dt(j['tx_date']),
       quantity: _i(j['quantity']), 
-      category_id: _i(j['category_id'])
+      category_id: _i(j['category_id']),
+      entryType: j['entry_type']?.toString() ?? '',
+      iconName: j['icon_name'] != null ? j['icon_name'].toString() : null,
+      colorHex: j['color_hex'] != null ? j['color_hex'].toString() : null,
     );
   }
 }

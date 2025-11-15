@@ -64,12 +64,6 @@ class _MostCategoryState extends State<MostCategory> {
       });
     }
   }
-  
-  // double _parseDouble(dynamic v) {
-  //   if (v == null) return 0.0;
-  //   if (v is num) return v.toDouble();
-  //   return double.tryParse(v.toString().replaceAll(',', '')) ?? 0.0;
-  // }
 
   Future<void> _syncTokenToClient() async {
     final prefs = await SharedPreferences.getInstance();
@@ -173,22 +167,52 @@ class _MostCategoryState extends State<MostCategory> {
               if (topOne != null)
                 Expanded(
                   child: _CategoryCard(
-                    accent: colorForCategoryId(topOne.categoryId),
-                    bgColor: colorForCategoryId(topOne.categoryId).withOpacity(0.1),
-                    amountStyle: GoogleFonts.prompt(fontSize: 18, color: colorForCategoryId(topOne.categoryId), fontWeight: FontWeight.bold),
-                    iconData: iconForCategoryId(topOne.categoryId),
+                    accent: (topOne.colorHex != null && topOne.colorHex!.isNotEmpty)
+                      ? colorFromHex(topOne.colorHex!)
+                      : Colors.blue,
+
+                    bgColor: ((topOne.colorHex != null && topOne.colorHex!.isNotEmpty)
+                      ? colorFromHex(topOne.colorHex!)
+                      : Colors.blue).withOpacity(0.1),
+
+                    amountStyle: GoogleFonts.prompt(
+                      fontSize: 18,
+                      color: (topOne.colorHex != null && topOne.colorHex!.isNotEmpty)
+                        ? colorFromHex(topOne.colorHex!)
+                        : Colors.blue,
+                      fontWeight: FontWeight.bold
+                    ),
+                    iconData: (topOne.iconName != null && topOne.iconName!.isNotEmpty)
+                      ? getIconFromKey(topOne.iconName!)
+                      : Icons.category_rounded,
+
                     name: topOne.categoryName,
-                    amountText: curencyTh.format(topOne.totalSpent)
+                    amountText: curencyTh.format(topOne.totalSpent),
                   ),
                 ),
               const SizedBox(width: 16),
               if (topTwo != null)
                 Expanded(
                   child: _CategoryCard(
-                    iconData: iconForCategoryId(topTwo.categoryId),
-                    accent: colorForCategoryId(topTwo.categoryId),
-                    bgColor: colorForCategoryId(topTwo.categoryId).withOpacity(0.1),
-                    amountStyle: GoogleFonts.prompt(fontSize: 18, color: colorForCategoryId(topTwo.categoryId), fontWeight: FontWeight.bold),
+                    accent: (topTwo.colorHex != null && topTwo.colorHex!.isNotEmpty)
+                      ? colorFromHex(topTwo.colorHex!)
+                      : Colors.blue,
+
+                    bgColor: ((topTwo.colorHex != null && topTwo.colorHex!.isNotEmpty)
+                      ? colorFromHex(topTwo.colorHex!)
+                      : Colors.blue).withOpacity(0.1),
+
+                    amountStyle: GoogleFonts.prompt(
+                      fontSize: 18,
+                      color: (topTwo.colorHex != null && topTwo.colorHex!.isNotEmpty)
+                        ? colorFromHex(topTwo.colorHex!)
+                        : Colors.blue,
+                      fontWeight: FontWeight.bold
+                    ),
+                    iconData: (topTwo.iconName != null && topTwo.iconName!.isNotEmpty)
+                      ? getIconFromKey(topTwo.iconName!)
+                      : Icons.category_rounded,
+
                     name: topTwo.categoryName,
                     amountText: curencyTh.format(topTwo.totalSpent),
                   ),

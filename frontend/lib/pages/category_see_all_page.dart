@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:frontend/models/category_summary.dart';
 import 'package:frontend/pages/category_detail_page.dart';
+import 'package:frontend/services/category_service.dart';
 import 'package:frontend/services/receipt_service.dart';
 import 'package:frontend/utils/category_icon_mapper.dart';
 import 'package:frontend/widgets/filter_month_year.dart';
@@ -37,6 +38,8 @@ class _CategorySeeAllState extends State<CategorySeeAll> {
   ];
 
   String? selectedSortOption = "Sort by Amount";
+
+  final _categoryService = CategoryService();
 
   void _popWithResult() {
     if (_didPop) return;
@@ -271,8 +274,16 @@ class _CategorySeeAllState extends State<CategorySeeAll> {
         
                         // Column map -> widget list
                         ...categories.map((c) {
-                          final catColor = colorForCategoryId(c.categoryId);
-                          final catIcon = iconForCategoryId(c.categoryId);
+                          debugPrint(
+                            'CategorySeeAll: ${c.categoryName} icon=${c.iconName} color=${c.colorHex}',
+                          );
+                          final catColor = (c.colorHex != null && c.colorHex!.isNotEmpty)
+                            ? colorFromHex(c.colorHex!)
+                            : const Color.fromARGB(255, 80, 70, 229);
+
+                          final catIcon = (c.iconName != null && c.iconName!.isNotEmpty)
+                            ? getIconFromKey(c.iconName!)
+                            : Icons.category_rounded;
                           final progress = (c.percent / 100).clamp(0.0, 1.0).toDouble();
                           return Padding(
                             padding: const EdgeInsets.only(bottom: 12),
@@ -309,7 +320,7 @@ class _CategorySeeAllState extends State<CategorySeeAll> {
                                           crossAxisAlignment: CrossAxisAlignment.center,
                                           children: [
                                             CircleAvatar(
-                                              backgroundColor: colorForCategoryId(c.categoryId).withOpacity(0.2),
+                                              backgroundColor: catColor.withOpacity(0.2),
                                               child: Icon(
                                                 catIcon,
                                                 color: catColor,

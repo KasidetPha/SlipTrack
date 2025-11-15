@@ -135,8 +135,18 @@ class _ItemsRecentState extends State<ItemsRecent> {
 
         return SingleChildScrollView(
           child: Column(
-            children: items.map((item) =>
-              Padding(
+            children: items.map((item) {
+              final iconData = 
+                (item.iconName != null && item.iconName!.isNotEmpty)
+                  ? getIconFromKey(item.iconName!)
+                  : Icons.category_rounded;
+
+              final iconColor =
+                (item.colorHex != null && item.iconName!.isNotEmpty)
+                  ? colorFromHex(item.colorHex!)
+                  : Colors.grey;
+
+              return Padding(
                 padding: const EdgeInsets.fromLTRB(24,0,24,12),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(12),
@@ -162,10 +172,13 @@ class _ItemsRecentState extends State<ItemsRecent> {
                             child: Row(
                               crossAxisAlignment: CrossAxisAlignment.center,
                               children: [
-                                Icon(
-                                  iconForCategoryId(item.category_id),
-                                  color: colorForCategoryId(item.category_id),
-                                  size: 28,
+                                CircleAvatar(
+                                  backgroundColor: iconColor.withOpacity(0.2),
+                                  child: Icon(
+                                    iconData,
+                                    color: iconColor,
+                                    size: 25,
+                                  ),
                                 ),
                                 const SizedBox(width: 15),
 
@@ -249,8 +262,8 @@ class _ItemsRecentState extends State<ItemsRecent> {
                     ),
                   ),
                 ),
-              )
-            ).toList()
+              );
+            }).toList()
           ),
         );
       }

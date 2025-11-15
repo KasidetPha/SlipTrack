@@ -2,7 +2,7 @@ import uvicorn
 import os
 import jwt
 import hashlib
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from typing import Optional, List, Any
 
 import aiomysql
@@ -76,7 +76,7 @@ class TokenPayload(BaseModel):
     email: str
     exp: int
     
-async def get_db_conn():
+async def get_db_conn() -> aiomysql.Pool:
     if not pool:
         raise HTTPException(status_code=500, detail="DB pool is not ready")
     return pool
@@ -126,6 +126,25 @@ class UpdateItemBody(BaseModel):
     category_id: int
     receipt_date: Optional[datetime] = None
     
+class ReceiptItemOut(BaseModel):
+    item_id: int
+    full_name: str
+    total_price: float
+    item_name: str
+    tx_date: date
+    quantity: float
+    category_id: int
+    entry_type: str
+    icon_name: Optional[str] = None
+    color_hex: Optional[str] = None
+    
+class CategoryMasterOut(BaseModel):
+    category_id: int
+    category_name: str
+    entry_type: str
+    icon_name: Optional[str] = None
+    color_hex: Optional[str] = None
+    
 # route
 
 @app.get('/')
@@ -162,7 +181,7 @@ async def login(body: LoginBody, db_pool: aiomysql.Pool = Depends(get_db_conn)):
 async def receipt_item_categories(
     body: MonthYear = Body(...),
     auth: TokenPayload = Depends(require_auth),
-    db_pool: aiomysql.pool = Depends(get_db_conn),
+    db_pool: aiomysql.Pool = Depends(get_db_conn),
 ):
     now = datetime.now(TZ)
     finalMonth = body.month or now.month
@@ -170,19 +189,28 @@ async def receipt_item_categories(
     
     sql = """
         SELECT 
-            expense_categories.category_id,
-            expense_categories.category_name,
-            SUM(receipt_items.total_price) AS total_spent
-        FROM receipt_items
-        LEFT JOIN expense_categories ON expense_categories.category_id = receipt_items.category_id
-        LEFT JOIN receipts ON receipts.receipt_id = receipt_items.receipt_id
-        WHERE receipts.user_id = %s
-            AND EXTRACT(MONTH FROM receipts.receipt_date) = %s
-            AND EXTRACT(YEAR FROM receipts.receipt_date) = %s
-        GROUP BY expense_categories.category_name
+            ec.category_id,
+            ec.category_name,
+            ec.icon_name,
+            ec.color_hex,
+            SUM(ri.total_price) AS total_spent
+        FROM receipt_items ri
+        LEFT JOIN expense_categories ec
+            ON ec.category_id = ri.category_id
+        LEFT JOIN receipts r
+            ON r.receipt_id = ri.receipt_id
+        WHERE r.user_id = %s
+            AND MONTH(r.receipt_date) = %s
+            AND YEAR(r.receipt_date)  = %s
+        GROUP BY
+            ec.category_id,
+            ec.category_name,
+            ec.icon_name,
+            ec.color_hex
         ORDER BY total_spent DESC
         LIMIT 2;
     """
+
     
     async with db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
@@ -192,32 +220,69 @@ async def receipt_item_categories(
             return rows
     
 # recent transactions -> home page
-@app.post("/receipt_item")
+@app.post("/receipt_item", response_model=List[ReceiptItemOut])
 async def receipt_item(
     body: MonthYear = Body(...),
     auth: TokenPayload = Depends(require_auth),
-    db_pool: aiomysql.pool = Depends(get_db_conn),
+    db_pool: aiomysql.Pool = Depends(get_db_conn),
 ):
     now = datetime.now(TZ)
     finalMonth = body.month or now.month
     finalYear = body.year or now.year
     
     sql = """
-        SELECT
-        ri.item_id, u.full_name, ri.total_price, ri.item_name, r.receipt_date, ri.quantity, ca.category_id
-        FROM receipts r
-        LEFT JOIN users u ON u.user_id = r.user_id
-        LEFT JOIN receipt_items ri ON ri.receipt_id = r.receipt_id
-        LEFT JOIN expense_categories ca ON ca.category_id = ri.category_id
-        WHERE r.user_id = %s
-        AND MONTH(r.receipt_date) = %s
-        AND YEAR(r.receipt_date)  = %s
-        ORDER BY r.receipt_date DESC
+        (
+            SELECT
+                ri.item_id                             AS item_id,
+                u.full_name                            AS full_name,
+                ri.total_price                         AS total_price,
+                ri.item_name                           AS item_name,
+                r.receipt_date                         AS tx_date,
+                ri.quantity                            AS quantity,
+                ec.category_id                         AS category_id,
+                ec.icon_name                           AS icon_name,
+                ec.color_hex                           AS color_hex,
+                'expense'                              AS entry_type
+            FROM receipts r
+            LEFT JOIN users u
+                ON u.user_id = r.user_id
+            LEFT JOIN receipt_items ri
+                ON ri.receipt_id = r.receipt_id
+            LEFT JOIN expense_categories ec
+                ON ec.category_id = ri.category_id
+            WHERE r.user_id = %s
+            AND MONTH(r.receipt_date) = %s
+            AND YEAR(r.receipt_date)  = %s
+        )
+        UNION ALL
+        (
+            SELECT
+                i.income_id                            AS item_id,
+                u.full_name                            AS full_name,
+                i.amount                               AS total_price,
+                ic.income_category_name                AS item_name,
+                i.income_date                          AS tx_date,
+                1                                      AS quantity,          -- ไม่มี quantity เลยใส่ 1 ไว้
+                ic.income_category_id                  AS category_id,
+                ic.icon_name                           AS icon_name,
+                ic.color_hex                           AS color_hex,
+                'income'                               AS entry_type
+            FROM incomes i
+            LEFT JOIN users u
+                ON u.user_id = i.user_id
+            LEFT JOIN income_categories ic
+                ON ic.income_category_id = i.income_category_id
+            WHERE i.user_id = %s
+            AND MONTH(i.income_date) = %s
+            AND YEAR(i.income_date)  = %s
+        )
+        ORDER BY tx_date DESC
     """
+
     
     async with db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(sql, (auth.id, finalMonth, finalYear))
+            await cur.execute(sql, (auth.id, finalMonth, finalYear, auth.id, finalMonth, finalYear))
             rows = await cur.fetchall()
             await conn.commit()
             return rows
@@ -226,7 +291,7 @@ async def receipt_item(
 async def monthlyTotal(
     body: MonthYearType,
     auth: TokenPayload = Depends(require_auth),
-    db_pool: aiomysql.pool = Depends(get_db_conn),
+    db_pool: aiomysql.Pool = Depends(get_db_conn),
 ):
     month, year, t = body.month, body.year, (body.type or "net")
     if not (1 <= month <= 12):
@@ -248,7 +313,7 @@ async def monthlyTotal(
     
     async with db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(sql, (auth.id, month, year, auth.id, month, year, ))
+            await cur.execute(sql, (auth.id, month, year, auth.id, month, year))
             row = await cur.fetchone()
             await conn.commit()
             
@@ -279,7 +344,7 @@ async def monthlyTotal(
 async def categories_summary(
     body: CategorySummaryBody,
     auth: TokenPayload = Depends(require_auth),
-    db_pool: aiomysql.pool = Depends(get_db_conn)
+    db_pool: aiomysql.Pool = Depends(get_db_conn)
 ):
 
     if not body.month or not body.year:
@@ -288,27 +353,35 @@ async def categories_summary(
     sql_main = """
         SELECT 
             cate.category_id,
-            cate.category_name, 
+            cate.category_name,
+            cate.icon_name,
+            cate.color_hex,
             COALESCE(SUM(
                 CASE 
-                WHEN re.user_id = %s
+                    WHEN re.user_id = %s
                         AND MONTH(re.receipt_date) = %s
-                        AND YEAR(re.receipt_date) = %s
-                THEN ri.total_price
+                        AND YEAR(re.receipt_date)  = %s
+                    THEN ri.total_price
                 END
-            ), 0) as total,
+            ), 0) AS total,
             COALESCE(COUNT(
                 CASE 
-                WHEN re.user_id = %s
+                    WHEN re.user_id = %s
                         AND MONTH(re.receipt_date) = %s
-                        AND YEAR(re.receipt_date) = %s
-                THEN ri.item_name
+                        AND YEAR(re.receipt_date)  = %s
+                    THEN ri.item_name
                 END
-            ),0) AS item_count
-        FROM expense_categories as cate
-        LEFT JOIN receipt_items as ri ON ri.category_id = cate.category_id
-        LEFT JOIN receipts as re ON re.receipt_id = ri.receipt_id 
-        GROUP BY cate.category_name
+            ), 0) AS item_count
+        FROM expense_categories AS cate
+        LEFT JOIN receipt_items AS ri
+            ON ri.category_id = cate.category_id
+        LEFT JOIN receipts AS re
+            ON re.receipt_id = ri.receipt_id
+        GROUP BY
+            cate.category_id,
+            cate.category_name,
+            cate.icon_name,
+            cate.color_hex
         ORDER BY total DESC;
     """
     
@@ -384,7 +457,7 @@ async def update_receipt_item(
                     FROM receipt_items ri
                     JOIN receipts re ON re.receipt_id = ri.receipt_id
                     WHERE ri.item_id = %s
-                """, (id)
+                """, (id,)
                 )
                 
                 row = await cur.fetchone()
@@ -415,15 +488,21 @@ async def items_in_category(
             ri.quantity      AS quantity,
             ri.total_price   AS total_price,
             ri.category_id   AS category_id,
-            re.receipt_date  AS receipt_date
+            re.receipt_date  AS receipt_date,
+            ec.icon_name     AS icon_name,
+            ec.color_hex     AS color_hex
         FROM receipt_items ri
-        JOIN receipts     re ON re.receipt_id  = ri.receipt_id
-        WHERE ri.category_id = %s
-            AND re.user_id     = %s
-            AND MONTH(re.receipt_date) = %s
-            AND YEAR(re.receipt_date)  = %s
+        JOIN receipts re
+            ON re.receipt_id  = ri.receipt_id
+        JOIN expense_categories ec
+            ON ec.category_id = ri.category_id
+        WHERE ri.category_id       = %s
+        AND re.user_id           = %s
+        AND MONTH(re.receipt_date) = %s
+        AND YEAR(re.receipt_date)  = %s
         ORDER BY re.receipt_date DESC, ri.item_id DESC
     """
+
     
     async with db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
@@ -431,6 +510,42 @@ async def items_in_category(
             rows = await cur.fetchall()
             await conn.commit()
             return rows
+
+@app.get("/categories/master", response_model=List[CategoryMasterOut])
+async def get_category_master(
+    auth: TokenPayload = Depends(require_auth),
+    db_pool: aiomysql.Pool = Depends(get_db_conn)
+):
+    sql = """
+        SELECT
+            ec.category_id       AS category_id,
+            ec.category_name     AS category_name,
+            'expense'            AS entry_type,
+            ec.icon_name         AS icon_name,
+            ec.color_hex         AS color_hex
+        FROM expense_categories ec
+
+        UNION ALL
+
+        SELECT
+            ic.income_category_id   AS category_id,
+            ic.income_category_name AS category_name,
+            'income'                AS entry_type,
+            ic.icon_name            AS icon_name,
+            ic.color_hex            AS color_hex
+        FROM income_categories ic
+
+        ORDER BY entry_type, category_id;
+    """
+
+    
+    async with db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            await cur.execute(sql)
+            rows = await cur.fetchall()
+            await conn.commit()
+            
+    return rows
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

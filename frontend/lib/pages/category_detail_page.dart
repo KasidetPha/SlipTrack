@@ -274,7 +274,9 @@ class _CategoryDetailPageState extends State<CategoryDetailPage> {
                             amount: item.total_price,
                             currency: _currencyTh,
                             date: item.receiptDate,
-                            onTap: () => _openEditModal(item)
+                            onTap: () => _openEditModal(item),
+                            iconName: item.iconName,
+                            colorHex: item.colorHex,
                           );
                         },
                       )
@@ -298,6 +300,8 @@ class _TransactionRow extends StatelessWidget {
   final NumberFormat currency;
   final VoidCallback? onTap;
   final DateTime? date;
+  final String? iconName;
+  final String? colorHex;
 
   const _TransactionRow({
     super.key,
@@ -308,6 +312,8 @@ class _TransactionRow extends StatelessWidget {
     required this.currency,
     required this.onTap,
     required this.date,
+    this.iconName,
+    this.colorHex
     });
 
   @override
@@ -315,6 +321,16 @@ class _TransactionRow extends StatelessWidget {
     final String dateLabel = (date != null)
       ? DateFormat('dd/MM/yyyy').format(date!)
       : '-';
+
+    final iconData = (iconName != null && iconName!.isNotEmpty)
+      ? getIconFromKey(iconName!)
+      : Icons.category_rounded;
+
+    final Color accentColor = (colorHex != null && colorHex!.isNotEmpty)
+      ? colorFromHex(colorHex!)
+      : Colors.grey;
+
+    final Color bgColor = accentColor.withOpacity(0.1);
 
     return Material(
       color: Colors.white,
@@ -331,8 +347,8 @@ class _TransactionRow extends StatelessWidget {
           child: Row(
             children: [
               CircleAvatar(
-                backgroundColor: colorForCategoryId(categoryId).withOpacity(0.2),
-                child: Icon(iconForCategoryId(categoryId), color: colorForCategoryId(categoryId),),
+                backgroundColor: bgColor,
+                child: Icon(iconData, color: accentColor,),
               ),
               const SizedBox(width: 15),
               Expanded(

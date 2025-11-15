@@ -1,30 +1,35 @@
 import 'package:flutter/material.dart';
 
-const Map<int, IconData> kIconByCategoryId = {
-  4: Icons.receipt_long,
-  2: Icons.restaurant,
-  3: Icons.shopping_bag,
-  5: Icons.directions_bus,
-  1: Icons.category
-};
+class CategoryIconOption {
+  final String key;
+  final IconData icon;
 
-const Map<int, Color> kColorByCategoryId = {
-  4: Color(0xFF27AE60), // Bills  (เขียว)
-  2: Color(0xFFE67E22), // Food   (ส้ม)
-  3: Color(0xFF2980B9), // Shop   (ฟ้า)
-  5: Color(0xFF8E44AD), // Transp (ม่วง)
-  1: Color(0xFF7F8C8D), // Others (เทา)
-};
+  const CategoryIconOption(this.key, this.icon);
+}
 
-const IconData kDefaultCategoryIcon = Icons.label_important_outline;
-const Color kDefaultCategoryColor = Colors.grey;
+const List<CategoryIconOption> kCategoryIconOptions = [
+  // --- expense ---
+  CategoryIconOption('category', Icons.category_rounded),
+  CategoryIconOption('restaurant', Icons.restaurant_rounded),
+  CategoryIconOption('shopping_bag', Icons.shopping_bag_rounded),
+  CategoryIconOption('receipt_long', Icons.receipt_long_rounded),
+  CategoryIconOption('directions_bus', Icons.directions_bus_rounded),
 
-IconData iconForCategoryId(int? id) => 
-  id != null && kIconByCategoryId.containsKey(id)
-  ? kIconByCategoryId[id]!
-  : kDefaultCategoryIcon;
+  // --- income ---
+  CategoryIconOption('payments', Icons.payments_rounded),
+  CategoryIconOption('work', Icons.work_rounded),
+  CategoryIconOption('card_giftcard', Icons.card_giftcard_rounded),
+  CategoryIconOption('sell', Icons.sell_rounded),
+];
 
-Color colorForCategoryId(int? id) =>
-  id != null && kColorByCategoryId.containsKey(id)
-  ? kColorByCategoryId[id]!
-  : kDefaultCategoryColor;
+IconData getIconFromKey(String key) {
+  final match = kCategoryIconOptions.where((o) => o.key == key);
+  if (match.isNotEmpty) return match.first.icon;
+  return Icons.category_rounded; // default ถ้าหา key ไม่เจอ
+}
+
+Color colorFromHex(String hex) {
+  var cleaned = hex.replaceFirst('#', '');
+  if (cleaned.length == 6) cleaned = 'FF$cleaned';
+  return Color(int.parse(cleaned, radix: 16));
+}

@@ -244,7 +244,9 @@ class ReceiptService {
             categoryName: e['category_name'] ?? '',
             total: total,
             itemCount: e['item_count'] ?? 0,
-            percent: percent
+            percent: percent,
+            iconName: e['icon_name']?.toString(),
+            colorHex: e['color_hex']?.toString()
           );
         }).toList();
       }
