@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/budget_page/budget_page.dart';
+// import 'package:frontend/pages/budget_page/budget_page.dart';
 import 'package:frontend/pages/category_see_all_page.dart';
+import 'package:frontend/pages/profile_page/budget_setting.dart';
 import 'package:frontend/pages/scan_page.dart';
+import 'package:frontend/utils/transaction_event.dart';
 import 'package:frontend/widgets/drawer/sliptrack_drawer.dart';
 import 'package:frontend/widgets/filter_month_year.dart';
 import 'package:frontend/widgets/home_page_widgets/expense_card.dart';
@@ -45,144 +49,178 @@ class _HomePageState extends State<HomePage> {
   @override
   Widget build(BuildContext context) {
   final colorScheme = Theme.of(context).colorScheme;
+  final now = DateTime.now();
 
     return SafeArea(
       child: Scaffold(
         drawer: SliptrackDrawer(
           displayName: 'kasidet', 
           email: 'Kasidet@gmail.com', 
-          balance: 12000,
+          balance: 30000,
           onScanReceipt: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanPage())),
+          onBudget: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BudgetPage(month: now.month, year: now.year,))),
           language: _lang,
           onLanguageChanged: (v) {
             setState(() => _lang = v); // ตอนนี้แค่ UI เปลี่ยนปุ่ม
             // ภายหลังค่อยผูกกับ l10n / setLocale() ของแอป
           },
         ),
-        body: SingleChildScrollView(
-          padding: EdgeInsets.only(bottom: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Header
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                // height: 280,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [
-                      Color.fromARGB(255, 37, 98, 235),
-                      Color.fromARGB(144, 76, 52, 234)
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(30),
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.4),
-                      blurRadius: 2,
-                      offset: const Offset(0, 1),
-                    )
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    HomeHeader(),
-                    SizedBox(height: 24),
-                    // MonthYearDropdown(
-                    //   onMonthYearChanged: onMonthYearChanged,
-                    // ),
-                    FilterMonthYear(
-                      initialMonth: selectedMonth,
-                      initialYear: selectedYear,
-                      onMonthYearChanged: onMonthYearChanged,
-                    ),
-                    SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: IncomeCard(
-                            selectedMonth: selectedMonth,
-                            selectedYear: selectedYear,
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        Expanded(
-                          child: ExpenseCard(
-                            selectedMonth: selectedMonth,
-                            selectedYear: selectedYear,
-                          )
+        body: ValueListenableBuilder<int>(
+          valueListenable: TransactionEvent.refresher,
+          builder: (context, refreshCount, child) {
+
+            // final refreshKey = ValueKey('refresh_$refreshCount');
+
+            return SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(24),
+                    // height: 280,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [
+                          Color.fromARGB(255, 37, 98, 235),
+                          Color.fromARGB(144, 76, 52, 234)
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ), 
+                      borderRadius: const BorderRadius.vertical(
+                        bottom: Radius.circular(30),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.4),
+                          blurRadius: 2,
+                          offset: const Offset(0, 1),
                         )
                       ],
                     ),
-                    SizedBox(height: 16),
-                    SummaryCard(
-                      selectedMonth: selectedMonth, 
-                      selectedYear: selectedYear,
-                      title: "Current Balance ${getMonthName(selectedMonth)} $selectedYear",
-                      // isCategoryMode: false,
-                    ),
-                  ],
-                ),
-              ),
-      
-              const SizedBox(height: 24),
-      
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24,0,0,24),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text("Spending by Categories", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.bold )),
-                    if (_hasCategoryData) 
-                      TextButton.icon(
-                        style: TextButton.styleFrom(iconAlignment: IconAlignment.end),
-                        onPressed: () async {
-                          await Navigator.push<Map<String, int>>(
-                            context, 
-                            MaterialPageRoute(
-                              builder: (ctx) => CategorySeeAll(
+                    child: Column(
+                      children: [
+                        HomeHeader(),
+                        SizedBox(height: 24),
+                        // MonthYearDropdown(
+                        //   onMonthYearChanged: onMonthYearChanged,
+                        // ),
+                        FilterMonthYear(
+                          key: ValueKey('${selectedMonth}_${selectedYear}'),
+                          initialMonth: selectedMonth,
+                          initialYear: selectedYear,
+                          onMonthYearChanged: onMonthYearChanged,
+                        ),
+                        SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: IncomeCard(
+                                key: ValueKey('income_$refreshCount'),
                                 selectedMonth: selectedMonth,
-                                selectedYear: selectedYear
+                                selectedYear: selectedYear,
+                              ),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: ExpenseCard(
+                                key: ValueKey('expense_$refreshCount'),
+                                selectedMonth: selectedMonth,
+                                selectedYear: selectedYear,
                               )
                             )
-                          );
-      
-                        },
-                        label: Text("See All", style: GoogleFonts.prompt(color: Colors.grey,),),
-                        icon: Icon(Icons.chevron_right_outlined, color: Colors.grey, size: 18,),
-                      )
-                  ],
-                ),
+                          ],
+                        ),
+                        SizedBox(height: 16),
+                        SummaryCard(
+                          key: ValueKey('summary_$refreshCount'),
+                          selectedMonth: selectedMonth, 
+                          selectedYear: selectedYear,
+                          title: "Current Balance ${getMonthName(selectedMonth)} $selectedYear",
+                          // isCategoryMode: false,
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24,0,0,24),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("Spending by Categories", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.bold )),
+                        if (_hasCategoryData) 
+                          TextButton.icon(
+                            style: TextButton.styleFrom(iconAlignment: IconAlignment.end),
+                            onPressed: () async {
+                              final result = await Navigator.push<Map<String, int>>(
+                                context, 
+                                MaterialPageRoute(
+                                  builder: (ctx) => CategorySeeAll(
+                                    selectedMonth: selectedMonth,
+                                    selectedYear: selectedYear
+                                  )
+                                )
+                              );
+            
+                              if (result != null && result['month'] != null && result['year'] != null) {
+            
+                                final newMonth = result['month']!;
+                                final newYear = result['year']!;
+            
+                                final isChange = newMonth != selectedMonth || newYear != selectedYear;
+            
+            
+                                setState(() {
+                                  selectedMonth = newMonth;
+                                  selectedYear = newYear;
+                                  itemsRecentKey = UniqueKey(); // Recentkey โหลดใหม่
+            
+                                  if (isChange) {
+                                    _hasCategoryData = false; // โหลด mostCategory ใหม่
+                                  }
+                                });
+                              }
+                  
+                            },
+                            label: Text("See All", style: GoogleFonts.prompt(color: Colors.grey,),),
+                            icon: Icon(Icons.chevron_right_outlined, color: Colors.grey, size: 18,),
+                          )
+                      ],
+                    ),
+                  ),
+                  MostCategory(
+                    key: ValueKey('most_cat_$refreshCount'),
+                    selectedMonth: selectedMonth, 
+                    selectedYear: selectedYear,
+                    onHasDataChanged: (hasData) {
+                      setState(() => _hasCategoryData = hasData);
+                    },
+                  ),
+                  
+                  // const SizedBox(height: 24),
+                  
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(24,24,24,24),
+                    child: Text("Recent Transactions", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.bold ),),
+                  ),
+                  
+                  // const SizedBox(height: 24),
+                  
+                  ItemsRecent(
+                    key: ValueKey('recent_$refreshCount'),
+                    selectedMonth: selectedMonth,
+                    selectedYear: selectedYear,
+                  )
+                ],
               ),
-              MostCategory(
-                selectedMonth: selectedMonth, 
-                selectedYear: selectedYear,
-                onHasDataChanged: (hasData) {
-                  setState(() => _hasCategoryData = hasData);
-                },
-              ),
-      
-              // const SizedBox(height: 24),
-      
-              Padding(
-                padding: const EdgeInsets.fromLTRB(24,24,24,24),
-                child: Text("Recent Transactions", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.bold ),),
-              ),
-      
-              // const SizedBox(height: 24),
-      
-              ItemsRecent(
-                key: itemsRecentKey,
-                selectedMonth: selectedMonth,
-                selectedYear: selectedYear,
-              )
-            ],
-          ),
+            );
+          }
         ),
         
       ),

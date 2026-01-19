@@ -1,0 +1,50 @@
+# --- SlipTrack Project GitIgnore ---
+
+# Python Backend (FastAPI)
+# -------------------------
+backend_fastAPI/.venv/
+backend_fastAPI/venv/
+backend_fastAPI/env/
+backend_fastAPI/__pycache__/
+backend_fastAPI/*.pyc
+backend_fastAPI/.env
+*.py[cod]
+*$py.class
+
+# Flutter / Dart
+# --------------
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+frontend/build/
+build/
+
+# Android/iOS Specific
+app.*.symbols
+app.*.map.json
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# IDEs and Editors
+# ----------------
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.history
+
+# Miscellaneous
+# -------------
+*.log
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.svn/
+migrate_working_dir/

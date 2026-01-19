@@ -13,6 +13,8 @@ class SliptrackDrawer extends StatelessWidget {
     this.onScanReceipt,
     this.onAddExpense,
     this.onAddIncome,
+    this.onBudget,
+    
     // 🔽 เพิ่มสองพารามิเตอร์นี้เพื่อควบคุม UI toggle
     required this.language,
     required this.onLanguageChanged,
@@ -25,6 +27,8 @@ class SliptrackDrawer extends StatelessWidget {
   final VoidCallback? onScanReceipt;
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddIncome;
+
+  final VoidCallback? onBudget;
 
   // 🔽 state ภายนอกส่งเข้ามา (แค่ UI เลยใช้ enum กับ callback)
   final AppLanguage language;
@@ -63,7 +67,7 @@ class SliptrackDrawer extends StatelessWidget {
                     const SizedBox(height: 8),
                     const _SectionLabel('Manage'),
                     _Tile(icon: Icons.category_rounded, label: 'Category', onTap: () {}),
-                    _Tile(icon: Icons.account_balance_wallet_rounded, label: 'Budget', onTap: () {}),
+                    _Tile(icon: Icons.account_balance_wallet_rounded, label: 'Budget', onTap: onBudget),
                     _Tile(icon: Icons.analytics_rounded, label: 'Reports & Analytics', onTap: () {}),
 
                     const SizedBox(height: 8),

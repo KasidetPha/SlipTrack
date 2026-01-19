@@ -28,6 +28,9 @@ class _AppColors {
 enum PriceMode {unit, total}
 
 class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
+
+  static const double _fieldHeight = 48;
+
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameCtrl;
   late TextEditingController _qtyCtrl;
@@ -52,6 +55,64 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
 
   static const _prefKeyPriceMode = 'edit_receipt_price_mode';
 
+  
+  Widget _buildPriceModeChip({
+    required PriceMode mode,
+    required String title,
+    required String subtitle,
+    required bool isLeft,
+  }) {
+    final bool selected = _priceMode == mode;
+
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _priceMode = mode;
+
+          if (_priceMode == PriceMode.unit) {
+            _recalcFromUnit();
+          } else {
+            _recalcFromTotal();
+          }
+        });
+        _savePriceMode();
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        height: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          // border: Border,
+          color: selected
+            ? _AppColors.primary.withOpacity(0.12)
+            : Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft:  isLeft ? const Radius.circular(12) : Radius.zero,
+            bottomLeft: isLeft ? const Radius.circular(12) : Radius.zero,
+            topRight: !isLeft ? const Radius.circular(12) : Radius.zero,
+            bottomRight: !isLeft ? const Radius.circular(12) : Radius.zero,
+          )
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.prompt(fontSize: 13, fontWeight: selected ? FontWeight.w600 : FontWeight.w400),
+            ),
+            Text(
+              subtitle, 
+              textAlign: TextAlign.center,
+              style: GoogleFonts.prompt(fontSize: 11, color: _AppColors.subtleText)
+            )
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _loadPriceMode() async {
     final prefs = await SharedPreferences.getInstance();
     final s = prefs.getString(_prefKeyPriceMode);
@@ -60,7 +121,6 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
 
       if (mounted) {
         setState(() {
-          
           _priceMode = mode;
 
           if (_priceMode == PriceMode.unit) {
@@ -292,12 +352,15 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                                 Text('Quantity', style: GoogleFonts.prompt(fontSize: 12, color: _AppColors.text),),
                                 const SizedBox(height: 6,),
                                 Container(
+                                  height: _fieldHeight,
+                                  alignment: Alignment.center,
                                   decoration: BoxDecoration(
                                     color: Colors.white,
                                     borderRadius: BorderRadius.circular(12),
                                     border: Border.all(color: _AppColors.border),
                                   ),
                                   child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
                                     children: [
                                       IconButton(
                                         onPressed: () {
@@ -350,48 +413,43 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text("Price Mode", style: TextStyle(fontSize: 12, color: _AppColors.text),),
+                                Text("Price Mode", style: GoogleFonts.prompt(fontSize: 12, color: _AppColors.text),),
                                 const SizedBox(height: 6,),
-                                SizedBox(
+                                Container(
+                                  height: _fieldHeight,
                                   width: double.infinity,
-                                  // height: 44,
-                                  child: SegmentedButton<PriceMode>(
-                                    segments: const [
-                                      ButtonSegment(value: PriceMode.unit, label: Center(child: Text('Unit\n(฿/item)', textAlign: TextAlign.center, maxLines: 2,)) ),
-                                      ButtonSegment(value: PriceMode.total, label: Center(child: Text('Total\n(฿)', textAlign: TextAlign.center, maxLines: 2,)) )
-                                    ], 
-                                    selected: {_priceMode},
-                                    showSelectedIcon: false,
-                                    style: ButtonStyle(
-                                      shape: MaterialStatePropertyAll(
-                                        RoundedRectangleBorder(
-                                          borderRadius: BorderRadiusGeometry.circular(12)
-                                        )
-                                      ),
-                                      visualDensity: VisualDensity.compact,
-                                      // fixedSize: const MaterialStatePropertyAll(Size(double.infinity, 44)),
-                                      padding: WidgetStateProperty.all(const EdgeInsets.symmetric(horizontal: 10, vertical: 8))
-                                    ),
-                                    onSelectionChanged: (s) {
-                                      setState(() {
-                                        _priceMode = s.first;
-                                  
-                                        if (_priceMode == PriceMode.unit) {
-                                          _recalcFromUnit();
-                                        } else {
-                                          _recalcFromTotal();
-                                        }
-                                      });
-                                  
-                                      _savePriceMode();
-                                    },
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    borderRadius: BorderRadius.circular(12),
+                                    // border: Border.all(color: _AppColors.border)
                                   ),
-                                )
+                                  clipBehavior: Clip.antiAlias,
+                                  child: Container(
+                                    height: _fieldHeight,
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: _AppColors.border)
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: _buildPriceModeChip(
+                                            mode: PriceMode.unit, 
+                                            title: "Unit", 
+                                            subtitle: "(฿/item)", 
+                                            isLeft: true
+                                          )
+                                        ),
+                                        Container(width: 1, color: Colors.transparent,),
+                                        Expanded(child: _buildPriceModeChip(mode: PriceMode.total, title: 'Total', subtitle: "(฿)", isLeft: false))
+                                      ],
+                                    ),
+                                  )
+                                ),
                               ],
                             ),
                           )
-                          
-
                         ],
                       ),
                       const SizedBox(height: 12,),

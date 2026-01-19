@@ -24,9 +24,6 @@ Future<void> showAddEntrySheet(
   if (result == 'income') onIncome?.call();
   if (result == 'scan') onScan?.call();
   if (result == 'expense') onExpense?.call();
-  if (result is String && result.startsWith('quick:')) {
-    onQuickAction?.call(result.replaceFirst('quick:', ''));
-  }
 }
 
 class _AddEntrySheet extends StatelessWidget {

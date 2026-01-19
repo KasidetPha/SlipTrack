@@ -194,7 +194,18 @@ class _AddExpenseBodyState extends State<AddExpenseBody> {
             ),
           ),
           SizedBox(height: 12,),
-          Text("Category", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.w700),),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text("Category", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.w700),),
+              Row(
+                children: [
+                  Text("Manage", style: GoogleFonts.prompt(color: Colors.blue[600]),),
+                  Icon(Icons.chevron_right_outlined, color: Colors.blue[600], size: 18,),
+                ],
+              ),
+            ],
+          ),
           SizedBox(height: 12,),
           // ===== Category Grid (แถวละ 4) =====
           GridView.builder(

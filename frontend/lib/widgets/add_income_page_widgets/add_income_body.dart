@@ -1,8 +1,6 @@
-import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 
@@ -12,146 +10,166 @@ class AddIncomeBody extends StatefulWidget {
   State<AddIncomeBody> createState() => _AddIncomeBodyState();
 }
 
+enum CategoryMode { auto, manual }
+
 class _AddIncomeBodyState extends State<AddIncomeBody> {
 
-  final  ImagePicker _picker = ImagePicker();
-  final now = DateTime.now();
+  static const Color kPrimary = Color(0xFF16A34A);
+  static const Color kBorder = Color(0x1A000000);
+  static const Color kFill = Colors.white;
+
+  CategoryMode _categoryMode = CategoryMode.auto;
+  int? _autoCategoryIndex; // หมวดที่ระบบเดาให้ (null ได้)
+  int _selectedCategoryIndex = 0; // manual pick
+
   final TextEditingController _controller = TextEditingController();
-  final NumberFormat _formatter = NumberFormat('#,###');
-  TextEditingController _dateController = TextEditingController();
+  final TextEditingController _sourceController = TextEditingController();
+  final TextEditingController _notesController = TextEditingController();
+  final NumberFormat _formatter = NumberFormat.decimalPattern('th_TH');
+  final TextEditingController _dateController = TextEditingController();
+
+  int? _suggestCategoryIndex() {
+    final source = _sourceController.text.toLowerCase();
+    final notes = _notesController.text.toLowerCase();
+    final text = '$source $notes';
+
+    bool has(List<String> keys) => keys.any(text.contains);
+
+    if (has(['salary', 'payroll', 'เงินเดือน'])) return 0;
+    if (has(['wage', 'job', 'freelance', 'ค่าจ้าง', 'รับจ๊อบ'])) return 1;
+    if (has(['gift', 'present', 'donate', 'ให้', 'ของขวัญ'])) return 2;
+    if (has(['sale', 'business', 'store', 'ขาย', 'ค้าขาย'])) return 3;
+
+    return null;
+  }
+
+  InputDecoration _inputDecoration({
+    required String hint,
+    Widget? prefixIcon,
+    Widget? suffixIcon,
+    EdgeInsetsGeometry? padding,
+  }) {
+    return InputDecoration(
+      filled: true,
+      fillColor: kFill,
+      hintText: hint,
+      hintStyle: GoogleFonts.prompt(color: Colors.black.withOpacity(0.35)),
+      contentPadding: padding ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      prefixIcon: prefixIcon,
+      suffixIcon: suffixIcon,
+      enabledBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: kBorder, width: 1.6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderSide: const BorderSide(color: kPrimary, width: 1.6),
+        borderRadius: BorderRadius.circular(12),
+      ),
+    );
+  }
+
+  TextStyle _labelStyle() => GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.w800);
 
   // ===== Category data =====
-final List<_Category> _categories = const [
-  _Category('Salary', Icons.payments_rounded, Color(0xFF64748B)), // เงินเดือน
-  _Category('Wages', Icons.work_rounded, Color(0xFFF59E0B)), // ค่าจ้าง/รับจ๊อบ
-  _Category('Gift', Icons.card_giftcard_rounded, Color(0xFF8B5CF6)), // มีคนให้
-  _Category('Business Sales',Icons.storefront_rounded, Color(0xFF10B981)), // ค้าขาย
-];
-
-  int _selectedCategoryIndex = 0; // default เลือกช่องแรก
+  final List<_Category> _categories = const [
+    _Category('Salary', Icons.payments_rounded, Color(0xFF64748B)), // เงินเดือน
+    _Category('Wages', Icons.work_rounded, Color(0xFFF59E0B)), // ค่าจ้าง/รับจ๊อบ
+    _Category('Gift', Icons.card_giftcard_rounded, Color(0xFF8B5CF6)), // มีคนให้
+    _Category('Business Sales',Icons.storefront_rounded, Color(0xFF10B981)), // ค้าขาย
+  ];
 
   @override
   void initState() {
     super.initState();
     _dateController.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
 
-    _controller.addListener(() {
-      String text = _controller.text;
-      
-      text = text.replaceAll(',', '').replaceAll('฿', '');
+    void refreshAuto() {
+      if (_categoryMode != CategoryMode.auto) return;
+      setState(() => _autoCategoryIndex = _suggestCategoryIndex());
+    }
+    _sourceController.addListener(refreshAuto);
+    _notesController.addListener(refreshAuto);
 
-      if (text.isNotEmpty) {
-        if (text.length > 8) text = text.substring(0,8);
-
-        String formatted =  _formatter.format(int.parse(text));
-
-        _controller.value = _controller.value.copyWith(
-          text: '$formatted ฿',
-          selection: TextSelection.collapsed(offset: formatted.length)
-        );
-      }
-    });
+    _autoCategoryIndex = _suggestCategoryIndex();
   }
 
   @override
   void dispose() {
     _controller.dispose();
     _dateController.dispose();
+    _sourceController.dispose();
+    _notesController.dispose();
     super.dispose();
+  }
+
+  int _gridCrossAxisCount(double width) {
+    if (width < 360) return 2;
+    if (width < 430) return 3;
+    return 4;
   }
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.sizeOf(context).width;
+    final crossAxisCount = _gridCrossAxisCount(width);
+
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24,24,24,96),
+      padding: const EdgeInsets.fromLTRB(24,24,24,24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text("Amount", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.w700)),
+          Text("Amount", style: _labelStyle()),
           SizedBox(height: 12),
           TextFormField(
-            style: GoogleFonts.prompt(
-              fontSize: 50,
-              color: Colors.black,
-              fontWeight: FontWeight.w400,
-            ),
             controller: _controller,
             keyboardType: TextInputType.number,
+            textAlign: TextAlign.right,
             inputFormatters: [
               FilteringTextInputFormatter.digitsOnly,
-              LengthLimitingTextInputFormatter(8),
+              LengthLimitingTextInputFormatter(9),
+              _ThousandsFormatter(_formatter)
             ],
-            decoration: InputDecoration(
-              contentPadding: EdgeInsets.symmetric(
-                horizontal: 24,
-                vertical: 24,
-              ),
-              filled: true,
-              fillColor: Colors.white,
-              hintText: "0.00",
-              hintStyle: GoogleFonts.prompt(
-                fontSize: 50,
-                color: Colors.black.withOpacity(0.2),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
-                borderRadius: BorderRadius.circular(12),
-              ),
+            style: GoogleFonts.prompt(
+              fontSize: 44,
+              color: Colors.black,
+              fontWeight: FontWeight.w700,
+            ),
+            decoration: _inputDecoration(
+              hint: "0",
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+              suffixIcon: Padding(
+                padding: const EdgeInsets.only(right: 14),
+                child: Center(
+                  widthFactor: 0,
+                  child: Text(
+                    "฿",
+                    style: GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.black.withOpacity(0.55)),
+                  ),
+                ),
+              )
             ),
           ),
           SizedBox(height: 12,),
-          Text("Source", style: GoogleFonts.prompt(fontWeight: FontWeight.w700, fontSize: 20)),
+          Text("Income source", style: _labelStyle()),
           SizedBox(height: 12,),
           TextFormField(
             style: GoogleFonts.prompt(),
-            // controller: _nameCtr,
-            decoration: InputDecoration(
-              contentPadding: EdgeInsets.all(12),
-              filled: true,
-              fillColor: Colors.white,
-              hintText: "Name",
-              hintStyle: GoogleFonts.prompt(
-                color: Colors.black.withOpacity(0.4),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
-                borderRadius: BorderRadius.circular(12)
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
-                borderRadius: BorderRadius.circular(12)
-              ),
-              suffix: Icon(Icons.calendar_today, ),
-            ),
+            controller: _sourceController,
+            decoration: _inputDecoration(
+              hint: "Name",
+              prefixIcon: const Icon(Icons.person_outline_rounded)
+            )
           ),
           SizedBox(height: 12,),
-          Text("Date", style: GoogleFonts.prompt(fontWeight: FontWeight.w700, fontSize: 20)),
+          Text("Date", style: _labelStyle()),
           SizedBox(height: 12,),
           TextFormField(
             style: GoogleFonts.prompt(),
             controller: _dateController,
             readOnly: true,
-            decoration: InputDecoration(
-              contentPadding: EdgeInsets.all(12),
-              filled: true,
-              fillColor: Colors.white,
-              hintText: "Select a date",
-              hintStyle: GoogleFonts.prompt(
-                color: Colors.black,
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
-                borderRadius: BorderRadius.circular(12)
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
-                borderRadius: BorderRadius.circular(12)
-              ),
-              suffix: Icon(Icons.calendar_today, ),
+            decoration: _inputDecoration(
+              hint: "Select a date",
+              suffixIcon: const Icon(Icons.calendar_today_rounded)
             ),
             onTap: () async {
               DateTime? pickedDate = await showDatePicker(
@@ -172,73 +190,128 @@ final List<_Category> _categories = const [
 
           SizedBox(height: 12,),
 
-          Text("Notes", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.w700),),
+          Text("Notes", style: _labelStyle()),
           SizedBox(height: 12,),
           TextFormField(
+            controller: _notesController,
             style: GoogleFonts.prompt(),
             minLines: 4,
             maxLines: 6,
-            decoration: InputDecoration(
-              filled: true,
-              fillColor: Colors.white,
-              enabledBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderSide: BorderSide(color: Colors.grey.withOpacity(0.5)),
-                borderRadius: BorderRadius.circular(12)
-              ),
-              hintText: "What is this income for?",
-              hintStyle: GoogleFonts.prompt(color: Colors.black.withOpacity(0.4))
-            ),
+            decoration: _inputDecoration(
+              hint: "What is this income for?",
+              prefixIcon: const Icon(Icons.notes_rounded)
+            )
           ),
           SizedBox(height: 12,),
-          Text("Category", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.w700),),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text("Category", style: GoogleFonts.prompt(fontSize: 20, fontWeight: FontWeight.w700),),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: SegmentedButton<CategoryMode>(
+                  segments: const [
+                    ButtonSegment(value: CategoryMode.auto, label: Text('Auto'), icon: Icon(Icons.auto_awesome_rounded)),
+                    ButtonSegment(value: CategoryMode.manual, label: Text('Manual'), icon: Icon(Icons.touch_app_rounded)),
+                  ],
+                  selected: {_categoryMode},
+                  onSelectionChanged: (s) {
+                    setState(() {
+                      _categoryMode = s.first;
+                      if (_categoryMode == CategoryMode.auto) {
+                        _autoCategoryIndex = _suggestCategoryIndex();
+                      }
+                    });
+                  },
+                  style: ButtonStyle(
+                    side: WidgetStateProperty.all(
+                      const BorderSide(color: kBorder),
+                    ),
+                    shape: WidgetStateProperty.all(
+                      RoundedRectangleBorder(borderRadius: BorderRadiusGeometry.circular(14)),
+                    )
+                  )
+                ),
+              )
+            ],
+          ),
           SizedBox(height: 12,),
           // ===== Category Grid (แถวละ 4) =====
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: _categories.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
-              mainAxisSpacing: 10,
-              crossAxisSpacing: 10,
-              childAspectRatio: 0.95,
+          if (_categoryMode == CategoryMode.auto) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.withOpacity(0.5))
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.auto_awesome_rounded),
+                  const SizedBox(width: 10,),
+                  Expanded(
+                    child: Text(
+                      _autoCategoryIndex == null
+                      ? "Auto: Not sure yet (switch to Manual)"
+                      : "Auto: ${_categories[_autoCategoryIndex!].name}",
+                      style: GoogleFonts.prompt(fontWeight: FontWeight.w600),
+                    )
+                  )
+                ],
+              ),
+            )
+          ] else ...[
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _categories.length,
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                mainAxisSpacing: 10,
+                crossAxisSpacing: 10,
+                childAspectRatio: crossAxisCount  <= 2 ? 2.1 : 0.95,
+              ),
+              itemBuilder: (_, i) {
+                final c = _categories[i];
+                final selected = i == _selectedCategoryIndex;
+                return _CategoryCard(
+                  name: c.name,
+                  icon: c.icon,
+                  color: c.color,
+                  selected: selected,
+                  onTap: () => setState(() => _selectedCategoryIndex = i),
+                );
+              },
             ),
-            itemBuilder: (_, i) {
-              final c = _categories[i];
-              final selected = i == _selectedCategoryIndex;
-              return _CategoryCard(
-                name: c.name,
-                icon: c.icon,
-                color: c.color,
-                selected: selected,
-                onTap: () => setState(() => _selectedCategoryIndex = i),
-              );
-            },
-          ),
-          // Center(
-          //   child: FilledButton(
-          //     style: FilledButton.styleFrom(
-          //       backgroundColor: Colors.green[600],
-          //       minimumSize: Size(200, 56),
-          //       shape: RoundedRectangleBorder(
-          //         borderRadius: BorderRadius.circular(50)
-          //       )
-          //     ),
-          //     onPressed: () {print("Save active");},
-          //     child: Text("Save", style: GoogleFonts.prompt(fontWeight: FontWeight.w700, fontSize: 16),),
-          //   ),
-          // ),
-          SizedBox(height: 24,),
-        ],
+            SizedBox(height: 24,),
+          ],
+        ]
       ),
     );
   }
 }
 
+class _ThousandsFormatter extends TextInputFormatter {
+  final NumberFormat nf;
+  _ThousandsFormatter(this.nf);
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue oldValue, TextEditingValue newValue) {
+    final raw = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (raw.isEmpty) {
+      return const TextEditingValue(text: '', selection: TextSelection.collapsed(offset: 0));
+    }
+
+    final formatted = nf.format(int.parse(raw));
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length)
+    );
+  }
+}
 
 // ===== category UI helpers =====
 
@@ -294,7 +367,7 @@ class _CategoryCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 name,
-                maxLines: 1,
+                maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.prompt(
                   fontSize: 12,

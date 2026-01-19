@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:frontend/pages/notifier_page/notifer_page.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class HomeHeader extends StatelessWidget {
@@ -72,11 +73,44 @@ class HomeHeader extends StatelessWidget {
               ),
             ),
             SizedBox(
-              width: 48, 
-              height: 48, 
-              child: (actions == null || actions!.isEmpty)
-                ? const SizedBox.shrink()
-                : Center(child: _ActionWrap(children: actions!),)
+              width: 48,
+              height: 48,
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Center(
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      iconSize: 24,
+                      onPressed: () {
+                        Navigator.push(context, MaterialPageRoute(builder: (context) => const NotiferPage()));
+                      }, 
+                      icon: Icon(
+                        Icons.notifications_active_rounded, 
+                        color: Colors.white,
+                      )
+                    ),
+                  ),
+                  Positioned(
+                    right: 4,
+                    top: 4,
+                    child: Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(
+                        color: Colors.redAccent,
+                        shape: BoxShape.circle
+                      ),
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: Center(
+                        child: Text("1", style: GoogleFonts.prompt(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),),
+                      ),
+                    )
+                  )
+                ],
+              ),
             )
           ],
         ),

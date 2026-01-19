@@ -22,6 +22,9 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'SlipTrack',
+      theme: ThemeData(
+        textTheme: GoogleFonts.promptTextTheme()
+      ),
       home: const SplashGate(), // ====> main
       // home: const ScanPage(),
       // home: const AddExpensePage(),

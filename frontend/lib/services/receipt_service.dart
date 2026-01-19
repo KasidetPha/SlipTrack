@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:frontend/models/budget_model.dart';
 import 'package:frontend/models/category_detail.dart';
 import 'package:frontend/models/category_summary.dart';
 import 'package:frontend/models/category_total.dart';
@@ -64,7 +67,7 @@ class ReceiptService {
   }
 
   // ดึงยอดรวมเดือนเดียว
-  Future<MonthlyTotal> GetMonthlyTotal({
+  Future<MonthlyTotal> getMonthlyTotal({
     required int month,
     required int year,
     MonthlyKind type = MonthlyKind.net,
@@ -98,7 +101,7 @@ class ReceiptService {
     }
   }
 
-  Future<StatsSummary> GetMonthlyComparison({
+  Future<StatsSummary> getMonthlyComparison({
     required int month,
     required int year,
     MonthlyKind type = MonthlyKind.net,
@@ -107,8 +110,8 @@ class ReceiptService {
     final prev = _previousMonth(month, year);
 
     final results = await Future.wait([
-      GetMonthlyTotal(month: month, year: year, type: type, cancelToken: cancelToken),
-      GetMonthlyTotal(month: prev.$1, year: prev.$2,type: type, cancelToken: cancelToken),
+      getMonthlyTotal(month: month, year: year, type: type, cancelToken: cancelToken),
+      getMonthlyTotal(month: prev.$1, year: prev.$2,type: type, cancelToken: cancelToken),
     ]);
 
     final thisMonth = results[0].amount;
@@ -201,7 +204,7 @@ class ReceiptService {
       if (res.statusCode == 401 || res.statusCode == 403) {
         throw ApiException('Unauthorized', statusCode: res.statusCode);
       }
-      throw ApiException('Fecth failed', statusCode: res.statusCode);
+      throw ApiException('Fetch failed', statusCode: res.statusCode);
     } on DioException catch (e) {
       final code = e.response?.statusCode;
       final body = e.response?.data;
@@ -250,7 +253,7 @@ class ReceiptService {
           );
         }).toList();
       }
-      throw ApiException('Fecth failed', statusCode: res.statusCode);
+      throw ApiException('Fetch failed', statusCode: res.statusCode);
     } on DioException catch (e) {
       final code = e.response?.statusCode;
       final body = e.response?.data;
@@ -365,6 +368,171 @@ class ReceiptService {
         : e.message ?? 'Network error';
 
       throw ApiException(msg, statusCode: code);
+    }
+  }
+
+  // =========================
+  // Budget APIs
+  // =========================
+
+  Future<BudgetResponse> fetchBudgets({
+    required int month,
+    required int year,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final res = await _dio.get(
+        '/budgets',
+        queryParameters: {
+          'month': month,
+          'year': year,
+        },
+        cancelToken: cancelToken,
+      );
+
+      if (res.statusCode == 200) {
+        final data = res.data;
+        if (data is! Map) {
+          throw ApiException('Unexpected response shape', statusCode: res.statusCode);
+        }
+        return BudgetResponse.fromJson(Map<String, dynamic>.from(data));
+      }
+
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        throw ApiException('Unauthorized', statusCode: res.statusCode);
+      }
+      throw ApiException('Fetch budgets failed', statusCode: res.statusCode);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final body = e.response?.data;
+      final msg = (body is Map && (body['message'] != null || body['Message'] != null))
+        ? (body['message'] ?? body['Message']).toString()
+        : e.message ?? 'Network error';
+
+      throw ApiException(msg, statusCode: code);
+    }
+  }
+
+  Future<BudgetResponse> updateBudget({
+    required BudgetResponse budget,
+    CancelToken? cancelToken
+  }) async {
+    try {
+      final res = await _dio.put(
+        '/budgets',
+        queryParameters: {
+          'month': budget.month,
+          'year': budget.year,
+        },
+        data: budget.toUpdateJson(),
+        cancelToken: cancelToken
+      );
+
+      if (res.statusCode == 200) {
+        final data = res.data;
+        if (data is! Map) {
+          throw ApiException("Unexpected response shape", statusCode: res.statusCode);
+        }
+
+        return BudgetResponse.fromJson(Map<String, dynamic>.from(data));
+      }
+
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        throw ApiException("Unauthorized", statusCode: res.statusCode);
+      }
+      throw ApiException('Update budgets failed', statusCode: res.statusCode);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final body = e.response?.data;
+      final msg = (body is Map && (body['message'] != null || body['Message'] != null))
+        ? (body['message'] ?? body['Message']).toString()
+        : e.message ?? 'Network error';
+
+      throw ApiException(msg, statusCode: code);
+    }
+  }
+
+  Future<void> addIncome({
+    required double amount,
+    required String source,
+    required DateTime date,
+    required String categoryName,
+    String? note,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final dateStr = DateFormat('yyyy-MM-dd').format(date);
+
+      final body = {
+        'amount': amount,
+        'source': source,
+        'date': dateStr,
+        'category_name': categoryName,
+        'note': note ?? '',
+      };
+
+      final res = await _dio.post(
+        '/incomes',
+        data: body,
+        cancelToken: cancelToken,
+      );
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return;
+      }
+
+      throw ApiException('Failed to add income', statusCode: res.statusCode);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final dynamic body = e.response?.data;
+      final msg = (body is Map && body['detail'] != null)
+        ? body['detail'].toString()
+        : e.message ?? 'Network error';
+      throw ApiException(msg, statusCode: code);
+    }
+  }
+
+  Future<void> addExpense({
+    required double amount,
+    required String itemName,
+    String? storeName,
+    required DateTime date,
+    required String categoryName,
+    String? note,
+    CancelToken? cancelToken
+  }) async {
+    try {
+      final dateStr = DateFormat('yyyy-MM-dd').format(date);
+
+      final body = {
+        'amount': amount,
+        'item_name': itemName,
+        'store_name': storeName,
+        'date': dateStr,
+        'category_name': categoryName,
+        'note': note ?? '',
+      };
+
+      final res = await _dio.post(
+        '/expenses',
+        data: body,
+        cancelToken: cancelToken,
+      );
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return;
+      }
+
+      throw ApiException('Failed to add expense', statusCode: res.statusCode);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final dynamic body = e.response?.data;
+
+      final msg = (body is Map)
+        ? (body['detail'] ?? body['message'] ?? 'Network error').toString()
+        : e.message ?? 'Network error';
+
+        throw ApiException(msg, statusCode: code);
     }
   }
 }

@@ -121,7 +121,7 @@ class _ExpenseCardState extends State<ExpenseCard> {
 
     ApiClient().setToken(token);
 
-    return ReceiptService().GetMonthlyComparison(
+    return ReceiptService().getMonthlyComparison(
       month: widget.selectedMonth,
       year: widget.selectedYear,
       type: MonthlyKind.expense,
@@ -201,17 +201,9 @@ class _ExpenseCardState extends State<ExpenseCard> {
         final String sign = isZero ? '' : (isIncrease ? '+' : '-');
         final percentText = "${percentChange.abs().toStringAsFixed(1)}%";
 
-        double? lastMonthEstimated;
-        final double ratio = 1 + (percentChange / 100.0);
-        if (ratio.abs() > 1e-9) {
-          lastMonthEstimated = thisMonth / ratio;
-        } else {
-          lastMonthEstimated = null;
-        }
+        final double lastMonth = summary.lastMonth ?? 0.0;
 
-        final double amountChange = (lastMonthEstimated == null)
-          ? 0.0
-          : (lastMonthEstimated * percentChange.abs() / 100.0);
+        final double amountChange = thisMonth - lastMonth;
 
         return InkWell(
           borderRadius: BorderRadius.circular(16),
@@ -235,11 +227,11 @@ class _ExpenseCardState extends State<ExpenseCard> {
                 )
               ]
             ),
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Stack(
-                children: [
-                  Positioned.fill(
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: ClipRRect(
+                    borderRadius: BorderRadiusGeometry.circular(16),
                     child: IgnorePointer(
                       child: Align(
                         alignment: Alignment.centerRight,
@@ -252,27 +244,35 @@ class _ExpenseCardState extends State<ExpenseCard> {
                           ),
                         ),
                       ),
-                    )
-                  ),
-
-                  Column(
-                    // mainAxisAlignment: MainAxisAlignment.start,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        // mainAxisAlignment: MainAxisAlignment.start,
-                        children: [
-                          Icon(arrowIcon, color: arrowColor,size: 25,),
-                          SizedBox(width: 6,),
-                          Text("Expenses", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
-                        ],
-                      ),
-                      SizedBox(height: 6,),
-                      Text("${currencyTh.format(thisMonth)}", style: GoogleFonts.prompt(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w700),),
-                      SizedBox(height: 2,),
-                      
-                      Row(
+                    ),
+                  )
+                ),
+            
+                Column(
+                  // mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      // mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        Icon(arrowIcon, color: arrowColor,size: 25,),
+                        SizedBox(width: 6,),
+                        Text("Expenses", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
+                      ],
+                    ),
+                    SizedBox(height: 6,),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text("${currencyTh.format(thisMonth)}", style: GoogleFonts.prompt(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w700),)
+                    ),
+                    SizedBox(height: 2,),
+                    
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Row(
                         children: [
                           Text(
                             isPercentView 
@@ -282,11 +282,11 @@ class _ExpenseCardState extends State<ExpenseCard> {
                           ),
                           Text("vs last mo.", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
                         ],
-                      )
-                    ],
-                  ),
-                ],
-              )
+                      ),
+                    )
+                  ],
+                ),
+              ],
             ),
           ),
         );

@@ -17,19 +17,25 @@ class BottomNavPage extends StatefulWidget {
 class _BottomNavPageState extends State<BottomNavPage> {
   int _currentIndex = 0;
 
-  final List<Widget> _pages = const [
-    HomePage(),
-    SizedBox.shrink(),
-    ProfilePage(),
-    // EditProfilePage()
-  ];
+  Key _homeKey = UniqueKey();
 
   Future<void> _onTap(int index) async {
     if (index == 1) {
       await showAddEntrySheet(
         context,
-        onIncome: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const AddIncomePage()));
+        onIncome: () async {
+          // Navigator.pop(context);
+          
+          final result = await Navigator.push(
+            context, MaterialPageRoute(builder: (_) => const AddIncomePage())
+          );
+
+          if (result == true) {
+            setState(() {
+              _homeKey = UniqueKey();
+              _currentIndex = 0;
+            });
+          }
         },
         onScan: () {
           Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanPage()));
@@ -48,9 +54,16 @@ class _BottomNavPageState extends State<BottomNavPage> {
 
   @override
   Widget build(BuildContext context) {
+
+    final List<Widget> pages = [
+      HomePage(key: _homeKey),
+      const SizedBox.shrink(),
+      const ProfilePage(),
+    ];
+
     return Scaffold(
       extendBody: false,
-      body: _pages[_currentIndex],
+      body: pages[_currentIndex],
 
       floatingActionButton: SizedBox(
         height: 56,

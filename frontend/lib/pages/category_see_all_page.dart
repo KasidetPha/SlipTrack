@@ -186,12 +186,56 @@ class _CategorySeeAllState extends State<CategorySeeAll> {
                       initialYear: year,
                       onMonthYearChanged: onMonthYearChange
                     ),
-                    const SizedBox(height: 12,), 
-                    SummaryCard(
-                      selectedMonth: month, 
-                      selectedYear: year,
-                      title: "Total Category for ${getMonthName(month)} $year",
-                      isCategoryMode: true,
+                    const SizedBox(height: 12,),
+                    // SummaryCard(
+                    //   selectedMonth: month, 
+                    //   selectedYear: year,
+                    //   title: "Total Category for ${getMonthName(month)} $year",
+                    //   isCategoryMode: true,
+                    // )
+                    FutureBuilder<List<CategorySummary>>(
+                      future: _future,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const SizedBox(
+                            height: 150,
+                            child: CircularProgressIndicator(color: Colors.white),
+                          );
+                        }
+
+                        if (snapshot.hasError) {
+                          return SizedBox(
+                            height: 150,
+                            child: Center(
+                              child: Text("Error loading categories", style: GoogleFonts.prompt(color: Colors.white),),
+                            ),
+                          );
+                        }
+
+                        final categories = snapshot.data ?? [];
+
+                        if (categories.isEmpty) {
+                          return SizedBox(
+                            height: 150,
+                            child: Center(
+                              child: Text('No categories', style: GoogleFonts.prompt(color: Colors.white),),
+                            ),
+                          );
+                        }
+
+                        final double totalCategoryAmount = categories.fold<double>(
+                          0.0,
+                          (sum,c) => sum + c.total,
+                        );
+
+                        return SummaryCard(
+                          selectedMonth: month, 
+                          selectedYear: year,
+                          title: "Total Category for ${getMonthName(month)} $year",
+                          isCategoryMode: true,
+                          totalOverride: totalCategoryAmount,
+                        );
+                      },
                     )
                   ],
                 ),

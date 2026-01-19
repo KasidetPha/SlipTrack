@@ -12,9 +12,13 @@ import 'package:frontend/pages/login_page.dart';
 class ItemsRecent extends StatefulWidget {
   final int selectedMonth;
   final int selectedYear;
+  final int? categoryId;
+
+
   const ItemsRecent({super.key,
     required this.selectedMonth,
-    required this.selectedYear
+    required this.selectedYear,
+    this.categoryId
   });
 
   @override
@@ -35,8 +39,13 @@ class _ItemsRecentState extends State<ItemsRecent> {
   void didUpdateWidget(ItemsRecent oldWidget) {
     super.didUpdateWidget(oldWidget);
     print("didUpdateWidget called - old: ${oldWidget.selectedMonth}/${oldWidget.selectedYear}, new ${widget.selectedMonth}/${widget.selectedYear}");
-    if(oldWidget.selectedMonth != widget.selectedMonth || oldWidget.selectedYear != widget.selectedYear) {
-      print("refreshing data for ${widget.selectedMonth}/${widget.selectedYear}");
+
+    final monthChange = oldWidget.selectedMonth != widget.selectedMonth || oldWidget.selectedYear != widget.selectedYear;
+
+    final categoryChanged = oldWidget.categoryId != widget.categoryId;
+
+    if(monthChange || categoryChanged) {
+      print("refreshing data for ${widget.selectedMonth}/${widget.selectedYear}, catId=${widget.categoryId}");
       setState(() {
         _futureItems = _load();
       });
@@ -95,14 +104,39 @@ class _ItemsRecentState extends State<ItemsRecent> {
     ApiClient().setToken(token);
 
     try {
-      final items = await ReceiptService().fetchReceiptItems(month: widget.selectedMonth, year: widget.selectedYear);
-      return items;
+      if (widget.categoryId != null) {
+        return await ReceiptService().fetchReceiptItemsByCategory(
+          categoryId: widget.categoryId!,
+          month: widget.selectedMonth,
+          year: widget.selectedYear,
+        );
+      } else {
+        return await ReceiptService().fetchReceiptItems(
+          month: widget.selectedMonth, 
+          year: widget.selectedYear
+        );
+      }
     } on ApiException catch (e) {
       if (e.statusCode == 401 || e.statusCode == 403) {
         await logoutAndRedirect();
         return [];
       }
       rethrow;
+    }
+  }
+
+  String _buildDateLabel(DateTime date) {
+    final now = DateTime.now();
+
+    final bool isSameDate = date.year == now.year && date.month == now.month && date.day == now.day;
+
+    final bool isCurrentFilter = widget.selectedMonth == now.month && widget.selectedYear == now.year;
+
+    if (isSameDate && isCurrentFilter) {
+      return 'Today ${date.day}';
+    } else {
+      final weekday = DateFormat('EEE').format(date);
+      return '$weekday ${date.day}';
     }
   }
 
@@ -131,135 +165,184 @@ class _ItemsRecentState extends State<ItemsRecent> {
           );
         }
 
-        final items = snapshot.data!;
+        final items = [...snapshot.data!]
+          ..sort(
+            (a, b) => b.receiptDate.compareTo(a.receiptDate),
+          );
 
         return SingleChildScrollView(
           child: Column(
-            children: items.map((item) {
+            children: List.generate(items.length, (index) {
+              final item = items[index];
+
+              print(item.item_name);
+              final DateTime dateOnly = 
+                DateUtils.dateOnly(item.receiptDate);
+
+              DateTime? previousDate;
+
+              if (index > 0) {
+                previousDate = DateUtils.dateOnly(items[index - 1].receiptDate);
+              }
+
+              final bool isFirstOfDay = 
+                previousDate == null || previousDate != dateOnly;
+
+              final String dateLabel = _buildDateLabel(dateOnly);
+
               final iconData = 
                 (item.iconName != null && item.iconName!.isNotEmpty)
                   ? getIconFromKey(item.iconName!)
                   : Icons.category_rounded;
 
               final iconColor =
-                (item.colorHex != null && item.iconName!.isNotEmpty)
+                (item.colorHex != null && item.colorHex!.isNotEmpty)
                   ? colorFromHex(item.colorHex!)
                   : Colors.grey;
+
+              final bool isIncome = item.entryType == 'income';
+
+              final String transactionLabel = isIncome ? 'Income' : 'Expense';
+
+              final Color amountColor = isIncome ? Colors.green.shade600 : Colors.red.shade600;
+
+              final String amountPrefix = isIncome ? '+' : '-';
 
               return Padding(
                 padding: const EdgeInsets.fromLTRB(24,0,24,12),
                 child: InkWell(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(16),
                   onTap: () {
                     _openEditModal(item);
                   },
-                  child: Container(
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.grey.withOpacity(0.2),
-                        width: 1.5,
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(15),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                CircleAvatar(
-                                  backgroundColor: iconColor.withOpacity(0.2),
-                                  child: Icon(
-                                    iconData,
-                                    color: iconColor,
-                                    size: 25,
-                                  ),
-                                ),
-                                const SizedBox(width: 15),
-
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-
-                                      Row(
-                                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                                        textBaseline: TextBaseline.alphabetic,
-                                        children: [
-                                          Flexible(
-                                            child: Text(
-                                              item.item_name,
-                                              style: GoogleFonts.prompt(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15,
-                                              ),
-                                              maxLines: 1,                
-                                              overflow: TextOverflow.ellipsis,
-                                              softWrap: true,
-                                            ),
-                                          ),
-                                          Text(
-                                            " x${item.quantity}",
-                                            style: GoogleFonts.prompt(
-                                              fontWeight: FontWeight.w500,
-                                              color: Colors.grey,
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-
-                                      const SizedBox(height: 4),
-
-                                      SizedBox(height: 2,),
-                                      Row(
-                                        children: [
-                                          Text(
-                                            DateFormat('dd/MM/yyyy').format(item.receiptDate),
-                                            style: GoogleFonts.prompt(
-                                              color: Colors.black.withOpacity(0.5),
-                                              fontSize: 13,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (isFirstOfDay) ... [
+                      Text(
+                          dateLabel,
+                          style: GoogleFonts.prompt(
+                            color: Colors.black.withOpacity(0.65),
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
                           ),
-
-                          const SizedBox(width: 12),
-
-                          Column(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            crossAxisAlignment: CrossAxisAlignment.end,
+                        ),
+                        const SizedBox(height: 6,)
+                      ],
+                        // const SizedBox(height: 12,),
+                      Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.black12,
+                            width: 1,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.04),
+                              offset: const Offset(0,2),
+                              blurRadius: 6
+                            )
+                          ]
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                '-${currencyTh.format(item.total_price)}',
-                                style: GoogleFonts.prompt(
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 18,
+                              Expanded(
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 19,
+                                      backgroundColor: iconColor.withOpacity(0.15),
+                                      child: Icon(
+                                        iconData,
+                                        color: iconColor,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 14),
+
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            transactionLabel, 
+                                            style: GoogleFonts.prompt(
+                                              color: Colors.black.withOpacity(0.85),
+                                              fontSize: 16, 
+                                              fontWeight: FontWeight.w700
+                                            ),
+                                          ),
+                                          const SizedBox(height: 4),
+
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                                            textBaseline: TextBaseline.alphabetic,
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  item.item_name,
+                                                  style: GoogleFonts.prompt(
+                                                    fontWeight: FontWeight.w500,
+                                                    fontSize: 14,
+                                                  ),
+                                                  maxLines: 1,                
+                                                  overflow: TextOverflow.ellipsis,
+                                                  softWrap: true,
+                                                ),
+                                              ),
+                                              Text(
+                                                " x${item.quantity}",
+                                                style: GoogleFonts.prompt(
+                                                  // fontWeight: FontWeight.w500,
+                                                  color: Colors.grey,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              
-                              const Icon(
-                                Icons.chevron_right_outlined,
-                                size: 18,
-                                color: Colors.grey,
+                      
+                              const SizedBox(width: 12),
+                      
+                              Column(
+                                // mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '$amountPrefix${currencyTh.format(item.total_price)}',
+                                    style: GoogleFonts.prompt(
+                                      color: amountColor,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                      
+                                  const SizedBox(height: 4,),
+                                  
+                                  const Icon(
+                                    Icons.chevron_right_outlined,
+                                    size: 18,
+                                    color: Colors.grey,
+                                  ),
+                                ],
                               ),
                             ],
                           ),
-                        ],
+                        ),
                       ),
-                    ),
+                    ],
                   ),
                 ),
               );

@@ -14,13 +14,16 @@ class SummaryCard extends StatefulWidget {
   final String title;
   final bool isCategoryMode;
 
+  // ถ้าส่งค่ามา จะใช้ค่านี้แทน summary.thisMonth
+  final double? totalOverride;
+
   const SummaryCard({
     super.key, 
     required this.selectedMonth, 
     required this.selectedYear,
     this.title = 'summary',
-    this.isCategoryMode = false
-    
+    this.isCategoryMode = false,
+    this.totalOverride,
   });
 
   @override
@@ -95,7 +98,7 @@ class _SummaryCardState extends State<SummaryCard> {
 
     ApiClient().setToken(token);
 
-    return ReceiptService().GetMonthlyComparison(
+    return ReceiptService().getMonthlyComparison(
       month: widget.selectedMonth,
       year: widget.selectedYear,
       cancelToken: cancelToken
@@ -159,8 +162,8 @@ class _SummaryCardState extends State<SummaryCard> {
           );
         }
 
-        final thisMonth = summary.thisMonth;
-        final percentChange = summary.percentChange;
+        final double amountToShow = widget.totalOverride ?? summary.thisMonth ?? 0.0;
+        final percentChange = summary.percentChange ?? 0.0;
 
         final isIncrease = percentChange > 0;
         final isZero = percentChange == 0;
@@ -251,7 +254,7 @@ class _SummaryCardState extends State<SummaryCard> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text(currencyTh.format(thisMonth), style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w700),)),
+                  Text(currencyTh.format(amountToShow), style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 22, color: Colors.white, fontWeight: FontWeight.w700),)),
                   // Text("95%", style: GoogleFonts.prompt(textStyle: TextStyle(fontSize: 22, color: Colors.greenAccent, fontWeight: FontWeight.w700),)),
                   
                 ],

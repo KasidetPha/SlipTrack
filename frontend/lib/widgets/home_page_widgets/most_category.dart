@@ -216,7 +216,9 @@ class _MostCategoryState extends State<MostCategory> {
                     name: topTwo.categoryName,
                     amountText: curencyTh.format(topTwo.totalSpent),
                   ),
-                ),
+                )
+              else
+                const Expanded(child: SizedBox())
             ],
           ),
         ],
