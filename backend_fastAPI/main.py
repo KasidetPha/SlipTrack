@@ -201,6 +201,8 @@ class MonthlyComparisionResponse(BaseModel):
     percent_change: float
     message: str = "ok"
     
+
+    
 # route
 async def _get_budget_data(
     db_pool: aiomysql.Pool,

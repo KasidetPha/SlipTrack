@@ -14,7 +14,6 @@ class ItemsRecent extends StatefulWidget {
   final int selectedYear;
   final int? categoryId;
 
-
   const ItemsRecent({super.key,
     required this.selectedMonth,
     required this.selectedYear,
@@ -26,13 +25,13 @@ class ItemsRecent extends StatefulWidget {
 }
 
 class _ItemsRecentState extends State<ItemsRecent> {
-  late Future<List<ReceiptItem>> _futureItems;
+  late Future<List<ReceiptItem>> _futureItems = _load();
   final currencyTh = NumberFormat.currency(locale: 'th_TH', symbol: '฿');
 
   @override
   void initState() {
     super.initState();
-    _futureItems = _load();
+    // _futureItems = _load();
   }
 
   @override
@@ -125,6 +124,14 @@ class _ItemsRecentState extends State<ItemsRecent> {
     }
   }
 
+  // Future<List<DailyGroup>> _loadGroupedData() async {
+  //   final List<ReceiptItem> rawItems = await _load();
+
+    
+
+
+  // }
+
   String _buildDateLabel(DateTime date) {
     final now = DateTime.now();
 
@@ -176,8 +183,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
               final item = items[index];
 
               print(item.item_name);
-              final DateTime dateOnly = 
-                DateUtils.dateOnly(item.receiptDate);
+              final DateTime dateOnly = DateUtils.dateOnly(item.receiptDate);
 
               DateTime? previousDate;
 
@@ -185,11 +191,23 @@ class _ItemsRecentState extends State<ItemsRecent> {
                 previousDate = DateUtils.dateOnly(items[index - 1].receiptDate);
               }
 
-              final bool isFirstOfDay = 
-                previousDate == null || previousDate != dateOnly;
+              final bool isFirstOfDay = previousDate == null || previousDate != dateOnly;
+
+              double dailyIncome = 0;
+              double dailyExpense = 0;
+
+              if (isFirstOfDay) {
+                final sameDayItems = items.where((i) => DateUtils.dateOnly(i.receiptDate) == dateOnly);
+                for (var dayItem in sameDayItems) {
+                  if (dayItem.entryType == 'income') {
+                    dailyIncome += dayItem.total_price;
+                  } else {
+                    dailyExpense += dayItem.total_price;
+                  }
+                }
+              }
 
               final String dateLabel = _buildDateLabel(dateOnly);
-
               final iconData = 
                 (item.iconName != null && item.iconName!.isNotEmpty)
                   ? getIconFromKey(item.iconName!)
@@ -210,27 +228,58 @@ class _ItemsRecentState extends State<ItemsRecent> {
 
               return Padding(
                 padding: const EdgeInsets.fromLTRB(24,0,24,12),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(16),
-                  onTap: () {
-                    _openEditModal(item);
-                  },
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (isFirstOfDay) ... [
-                      Text(
-                          dateLabel,
-                          style: GoogleFonts.prompt(
-                            color: Colors.black.withOpacity(0.65),
-                            fontWeight: FontWeight.w600,
-                            fontSize: 13,
-                          ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (isFirstOfDay) ... [
+                    Text(
+                        dateLabel,
+                        style: GoogleFonts.prompt(
+                          color: Colors.black.withOpacity(0.65),
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
                         ),
-                        const SizedBox(height: 6,)
-                      ],
-                        // const SizedBox(height: 12,),
+                      ),
+                      const SizedBox(height: 6,),
                       Container(
+                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF9F9F9),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: Colors.black12.withOpacity(0.05)),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Expense', style: GoogleFonts.prompt(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey),),
+                                  SizedBox(height: 5,),
+                                  Text("-${currencyTh.format(dailyExpense)}", style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red.shade700),),
+                                ],
+                              )
+                            ),
+                            Container(width: 1, height: 48, decoration: BoxDecoration(border: Border.all(color: Colors.black12)),),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text('Income', style: GoogleFonts.prompt(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey),),
+                                  SizedBox(height: 5,),
+                                  Text("+${currencyTh.format(dailyIncome)}", style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green.shade700),)
+                                ],
+                              )
+                            )
+                          ],
+                        ),
+                      ),
+                      SizedBox(height: 12,),
+                    ],
+                    InkWell(
+                      onTap:() => _openEditModal(item),
+                      borderRadius: BorderRadius.circular(16),
+                      child: Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
                           color: Colors.white,
@@ -266,7 +315,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
                                       ),
                                     ),
                                     const SizedBox(width: 14),
-
+                                      
                                     Expanded(
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -280,7 +329,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
                                             ),
                                           ),
                                           const SizedBox(height: 4),
-
+                                      
                                           Row(
                                             crossAxisAlignment: CrossAxisAlignment.baseline,
                                             textBaseline: TextBaseline.alphabetic,
@@ -342,8 +391,8 @@ class _ItemsRecentState extends State<ItemsRecent> {
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               );
             }).toList()
