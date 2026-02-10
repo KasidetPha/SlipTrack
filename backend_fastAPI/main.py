@@ -4,9 +4,10 @@ import jwt
 import hashlib
 from datetime import datetime, timedelta, timezone, date
 from typing import Optional, List, Any
+from contextlib import asynccontextmanager
 
 import aiomysql
-from fastapi import FastAPI, Depends, HTTPException, status, Body, Path, Query
+from fastapi import FastAPI, Depends, HTTPException, status, Body, Path, Query, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
@@ -16,11 +17,12 @@ load_dotenv()
 
 # config
 
-MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
-MYSQL_USER = os.getenv("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "password1234")
-MYSQL_DB = os.getenv("MYSQL_DB", "sliptrack")
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
+MYSQL_HOST = os.getenv("DB_HOST", "localhost")
+MYSQL_USER = os.getenv("DB_USER", "root")
+MYSQL_PASSWORD = os.getenv("DB_PASSWORD", "password1234")
+MYSQL_DB = os.getenv("DB_NAME", "sliptrack")
+MYSQL_PORT = int(os.getenv("DB_PORT", "3307"))
+
 POOL_MIN = int(os.getenv("MYSQL_POOL_MIN", "1"))
 POOL_MAX = int(os.getenv("MYSQL_POOL_MAX", "10"))
 
@@ -30,24 +32,16 @@ JWT_ALGORITHM = "HS256"
 
 TZ = timezone(timedelta(hours=7))  # Asia/Bangkok
 
-# App & middlewares
 
-app = FastAPI(title="SlipTrack FastAPI")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
 
 # DB Pool (aiomysql)
 
 pool: aiomysql.Pool | None = None
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global pool
+    print("Connecting to Database...")
     pool = await aiomysql.create_pool(
         host=MYSQL_HOST,
         port=MYSQL_PORT,
@@ -59,13 +53,22 @@ async def startup():
         maxsize=POOL_MAX,
         charset="utf8mb4"
     )
-    
-@app.on_event("shutdown")
-async def shutdown():
-    global pool
+    yield
+    print("Closing Database...")
     if pool:
         pool.close()
         await pool.wait_closed()
+        
+# App & middlewares
+
+app = FastAPI(title="SlipTrack FastAPI", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
         
 # Auth helpers
 
@@ -201,7 +204,37 @@ class MonthlyComparisionResponse(BaseModel):
     percent_change: float
     message: str = "ok"
     
-
+class BoundingBox(BaseModel):
+    x: int
+    y: int
+    w: int
+    h: int
+    
+class ReceiptItem(BaseModel):
+    name: str
+    price: float
+    qty: int
+    date: str
+    category_id: int
+    bounding_box: BoundingBox
+    
+class ScanResponse(BaseModel):
+    status: str
+    merchant_name: str
+    items: List[ReceiptItem]
+    total_amount: float
+    
+class ReceiptItemBatchRequest(BaseModel):
+    item_name: str
+    quantity: int
+    total_price: float
+    category_id: int
+    
+class ReceiptBatchCreateRequest(BaseModel):
+    merchant_name: str
+    receipt_date: date
+    total_amount: float
+    items: List[ReceiptItemBatchRequest]
     
 # route
 async def _get_budget_data(
@@ -891,7 +924,7 @@ async def monthly_comparison(
     sql = f"""
         SELECT
             COALESCE(SUM(CASE
-                WHEN MONTH({date_col}) = %s AND YEAR({date_col} = %s THEN {amount_col}
+                WHEN MONTH({date_col}) = %s AND YEAR({date_col}) = %s THEN {amount_col}
                 ELSE 0
             END), 0) as this_month_total,
             COALESCE(SUM(CASE
@@ -918,9 +951,9 @@ async def monthly_comparison(
     
     if last_month == 0:
         if this_month > 0:
-            percent_change == 100.0
+            percent_change = 100.0
         elif this_month < 0:
-            percent_change == -100.0
+            percent_change = -100.0
         else:
             percent_change = 0.0
     else:
@@ -931,6 +964,99 @@ async def monthly_comparison(
         "last_month": last_month,
         "percent_change": percent_change
     }
+    
+@app.post("/scan-receipt", response_model=ScanResponse)
+async def scan_receipt(file: UploadFile = File(...)):
+    # --TODO: เรียก ocr model
+    return {
+        "status": "success",
+        "merchant_name": "7-Eleven สาขา Mockup",
+        "total_amount": 55.0,
+        "items": [
+            {
+                "name": "dog",
+                "price": "1500",
+                "qty": 1,
+                "date": "09-02-69",
+                "category_id": 2,
+                "bounding_box": {"x": 50, "y":200, "w":300, "h":50}
+            },
+            {
+                "name": "cat",
+                "price": 1200,
+                "qty": 1,
+                "date": "09-02-69",
+                "category_id": 2,
+                "bounding_box": {"x": 50, "y": 260, "w": 300, "h": 50}
+            }
+        ]
+    }
+    
+@app.post("/receipts/batch")
+async def create_batch_receipt(
+    body: ReceiptBatchCreateRequest,
+    auth: TokenPayload = Depends(require_auth),
+    db_pool: aiomysql.Pool = Depends(get_db_conn)
+):
+    async with db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            try:
+                await conn.begin()
+                
+                sql_receipt = """
+                    INSERT INTO receipts
+                    (user_id, store_name, receipt_date, total_amount, source, created_at)
+                    VALUES (%s, %s, %s, %s, 'ocr', NOW())
+                """
+                
+                await cur.execute(sql_receipt, (
+                    auth.id,
+                    body.merchant_name,
+                    body.receipt_date,
+                    body.total_amount
+                ))
+                
+                receipt_id = cur.lastrowid
+                
+                if body.items:
+                    item_values = []
+                    
+                    for item in body.items:
+                        qty = item.quantity if item.quantity > 0 else 1
+                        unit_price = item.total_price / qty
+                        
+                        item_values.append((
+                            receipt_id,
+                            item.category_id,
+                            item.item_name,
+                            item.quantity,
+                            unit_price,
+                            item.total_price
+                        ))
+                        
+                    sql_items = """
+                        INSERT INTO receipt_items
+                        (receipt_id, category_id, item_name, quantity, unit_price, total_price)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """
+                    
+                    await cur.executemany(sql_items, item_values)
+                
+                await conn.commit()
+                
+                return {
+                    "message": "Receipt saved successfully",
+                    "receipt_id": receipt_id
+                }
+                    
+                        
+            except Exception as e:
+                await conn.rollback()
+                print(f"Error saving batch: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to save  receipt: {str(e)}"
+                )
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)

@@ -1,0 +1,44 @@
+# docker-compose.yml (วางไว้หน้าสุด คู่กับโฟลเดอร์ backend_fastAPI)
+version: '2.4'
+
+services:
+  # 1. ส่วน Database (MySQL)
+  db:
+    image: mysql:8.0
+    container_name: sliptrack-db
+    restart: always
+    environment:
+      MYSQL_DATABASE: sliptrack
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}  # อ่านจากไฟล์ .env
+    volumes:
+      - mysql_data:/var/lib/mysql  # เก็บข้อมูลถาวร แม้ลบ Container ข้อมูลไม่หาย
+    networks:
+      - sliptrack-net
+    ports:
+      - "3307:3306"
+
+  # 2. ส่วน Backend (FastAPI)
+  backend:
+    build: ./backend_fastAPI  # ชี้ไปที่โฟลเดอร์ backend ของคุณ
+    container_name: sliptrack-backend
+    restart: always
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend_fastAPI:/app  # (Hot Reload) แก้โค้ดในเครื่อง ผลเปลี่ยนใน Docker ทันที
+    environment:
+      DB_HOST: db               # ชื่อ service ของ database ด้านบน
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: sliptrack
+    depends_on:
+      - db
+    networks:
+      - sliptrack-net
+
+volumes:
+  mysql_data:
+
+networks:
+  sliptrack-net:

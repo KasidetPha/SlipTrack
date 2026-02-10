@@ -8,7 +8,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class EditReceiptItemSheet extends StatefulWidget {
   final ReceiptItem item;
-  const EditReceiptItemSheet({super.key, required this.item});
+  final bool isScanMode;
+  const EditReceiptItemSheet({
+    super.key, 
+    required this.item, 
+    this.isScanMode = false
+  });
 
   @override
   State<EditReceiptItemSheet> createState() => _EditReceiptItemSheetState();
@@ -147,7 +152,6 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
     _nameCtrl = TextEditingController(text: widget.item.item_name);
     _qtyCtrl = TextEditingController(text: widget.item.quantity.toString());
     _priceCtrl = TextEditingController(text: widget.item.total_price.toStringAsFixed(2));
-    _loadPriceMode();
 
     final q = widget.item.quantity;
     final unit = q > 0
@@ -159,6 +163,8 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
     _categoryId = _categoryOptions.any((c) => c['id'] == widget.item.category_id)
       ? widget.item.category_id
       : _categoryOptions.first['id'] as int;
+
+    _loadPriceMode();
   }
 
   @override
@@ -220,32 +226,47 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final name = _nameCtrl.text.trim();
     final qty = _qty();
 
-    final price = _priceMode == PriceMode.unit ? _unitPrice() * qty : _totalPrice();
+    final totalPrice = _priceMode == PriceMode.unit ? _unitPrice() * qty : _totalPrice();
 
-    setState(() => _saving = true);
-    try {
-      await ReceiptService().updateReceiptItem(
-        id: widget.item.item_id,
-        itemName: name,
-        quantity: qty,
-        totalPrice: price,
-        receiptDate: _date,
-        categoryId: _categoryId
-      );
+    final updatedItem = widget.item.copyWith(
+      item_name: _nameCtrl.text.trim(),
+      quantity: qty,
+      total_price: totalPrice,
+      receiptDate: _date,
+      category_id: _categoryId
+    );
 
-      if (!mounted) return;
-      Navigator.pop(context, true);
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e'))
-      );
-    } finally {
-      if (mounted) setState(() => _saving = false);
+    if (widget.isScanMode) {
+      Navigator.pop(context, updatedItem);
+    } else {
+
+      setState(() => _saving = true);
+
+      try {
+        await ReceiptService().updateReceiptItem(
+          id: updatedItem.item_id,
+          itemName: updatedItem.item_name,
+          quantity: updatedItem.quantity,
+          totalPrice: updatedItem.total_price,
+          receiptDate: updatedItem.receiptDate,
+          categoryId: updatedItem.category_id
+        );
+      
+        if (!mounted) return;
+        Navigator.pop(context, updatedItem);
+
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Save failed: $e'), backgroundColor: Colors.red,)
+        );
+      } finally {
+        if (mounted) setState(() => _saving = false);
+      }
     }
+
   }
 
   InputDecoration _input({String? hint, String? prefix, Color? fillColor = Colors.white}) {
@@ -323,7 +344,7 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                     ),
                     IconButton(
                       tooltip: 'Close',
-                      onPressed: _saving ? null : () => Navigator.pop(context, false), 
+                      onPressed: _saving ? null : () => Navigator.pop(context, null), 
                       icon: const Icon(Icons.close_rounded)
                     )
                   ],
@@ -599,7 +620,7 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                   children: [
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: _saving ? null : () => Navigator.pop(context, false), 
+                        onPressed: _saving ? null : () => Navigator.pop(context, null), 
                         child: const Text("Cancel"),
                       )
                     ),
