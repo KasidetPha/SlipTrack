@@ -1,27 +1,31 @@
 import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 
 
+import 'dart:io';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class ApiEnv {
-  // ปรับให้ตรงกับวิธีรัน backend:
-  // - Android Emulator: 'http://10.0.2.2:3000'
-  // - iOS Simulator/Desktop: 'http://localhost:3000'
-  // - มือถือจริง: 'http://<IP คอม>:3000'
-  // static const baseUrl = 'http://localhost:3000';
-
   static String resolveBaseUrl() {
-    if (kIsWeb) return 'http://localhost:8000';
-    if (Platform.isAndroid) return 'http://10.0.2.2:8000';
-    return 'http://localhost:8000';
-  }
+    // ดึงค่าตามแพลตฟอร์ม
+    if (kIsWeb) {
+      return dotenv.env['API_BASE_URL_WEB'] ?? 'http://localhost:8000';
+    }
+    
+    if (Platform.isAndroid) {
+      return dotenv.env['API_BASE_URL_ANDROID'] ?? 'http://10.0.2.2:8000';
+    }
+    
+    if (Platform.isIOS) {
+      return dotenv.env['API_BASE_URL_IOS'] ?? 'http://localhost:8000';
+    }
 
-  // static String resolveBaseUrl() {
-  //   if (kIsWeb) return 'http://localhost:3000';
-  //   if (Platform.isAndroid) return 'http://10.0.2.2:3000';
-  //   return 'http://localhost:3000';
-  // }
+    return dotenv.env['API_BASE_URL_ANDROID'] ?? 'http://192.168.1.9:8000';
+  }
 
   static const timeout = Duration(seconds: 15);
 }
@@ -39,7 +43,6 @@ class ApiClient {
         baseUrl: ApiEnv.resolveBaseUrl(),
         connectTimeout: ApiEnv.timeout,
         receiveTimeout: ApiEnv.timeout,
-        // sendTimeout: ApiEnv.timeout,
         sendTimeout: kIsWeb ? Duration.zero : ApiEnv.timeout,
         headers: {'Content-Type': 'application/json'},
         responseType: ResponseType.json,

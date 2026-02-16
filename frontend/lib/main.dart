@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:frontend/pages/add_expense_page.dart';
 import 'package:frontend/pages/category_detail_page.dart';
 import 'package:frontend/pages/category_see_all_page.dart';
@@ -9,8 +10,11 @@ import 'package:frontend/widgets/add_entry_sheet.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'widgets/bottom_nav_page.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
+
   runApp(const MyApp());
 }
 

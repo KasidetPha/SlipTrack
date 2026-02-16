@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:frontend/models/receipt_item.dart';
@@ -7,6 +8,7 @@ import 'package:frontend/widgets/add_expense_page_widgets/add_expense_body.dart'
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum CategoryMode { auto, manual }
 
@@ -23,6 +25,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
   static const Color kFill = Colors.white;
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+
+  static const String _prefKeyMode = 'last_category_mode';
 
   bool _isLoading = false;
 
@@ -100,6 +104,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
   @override
   void initState() {
     super.initState();
+    _loadSettings();
     _dateController.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
 
     void refreshAuto() {
@@ -120,6 +125,24 @@ class _AddExpensePageState extends State<AddExpensePage> {
     _notesController.dispose();
     _dateController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isManual = prefs.getBool(_prefKeyMode) ?? false;
+    if (mounted) {
+      setState(() {
+        _categoryMode = isManual ? CategoryMode.manual : CategoryMode.auto;
+        if (_categoryMode == CategoryMode.auto) {
+          _autoCategoryIndex = _suggestCategoryIndex();
+        }
+      });
+    }
+  }
+
+  Future<void> _saveSettings(CategoryMode mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_prefKeyMode, mode == CategoryMode.manual);
   }
 
   void _onSave() async {
@@ -150,6 +173,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
       );
 
       if (mounted) {
+        TransactionEvent.triggerRefresh();
+
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("บันทึกสำเร็จ!"), backgroundColor: Colors.green,)
         );
@@ -346,12 +371,14 @@ class _AddExpensePageState extends State<AddExpensePage> {
                               ],
                               selected: {_categoryMode},
                               onSelectionChanged: (s) {
+                                final newMode = s.first;
                                 setState(() {
-                                  _categoryMode = s.first;
+                                  _categoryMode = newMode;
                                   if (_categoryMode == CategoryMode.auto) {
                                     _autoCategoryIndex = _suggestCategoryIndex();
                                   }
                                 });
+                                _saveSettings(newMode);
                               },
                               style: ButtonStyle(
                                 side: WidgetStateProperty.all(

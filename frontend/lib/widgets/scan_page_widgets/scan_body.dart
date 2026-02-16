@@ -47,7 +47,7 @@ class _ScanBodyState extends State<ScanBody> {
     setState(() => _isScanning = true);
 
     try {
-      const String scanApiUrl = "http://10.0.2.2:8000/scan-receipt";
+      const String scanApiUrl = "http://192.168.1.12:8000/scan-receipt";
       var uri = Uri.parse(scanApiUrl);
       var request = http.MultipartRequest('POST', uri);
 

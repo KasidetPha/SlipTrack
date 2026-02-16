@@ -574,4 +574,53 @@ class ReceiptService {
       throw ApiException(msg, statusCode: code);
     }
   }
+
+  Future<void> updateIncome({
+    required int id,
+    required String incomeSource,
+    required double amount,
+    required DateTime incomeDate,
+    required int categoryId,
+    CancelToken? cancelToken,
+  }) async {
+    final dateStr = DateFormat('yyyy-MM-dd').format(incomeDate);
+
+    final amount2 = double.parse(amount.toStringAsFixed(2));
+
+    final body = {
+      'income_source': incomeSource,
+      'amount': amount2,
+      'category_id': categoryId,
+      'income_date': dateStr
+    };
+
+    try {
+      final res = await _dio.put(
+        '/incomes/$id',
+        data:body,
+        cancelToken: cancelToken,
+        options: Options(headers:{"Content-Type": "application/json"}),
+      );
+
+      final code = res.statusCode ?? 0;
+      if (code >= 200 && code < 300) {
+        return;
+      }
+
+      throw ApiException("Failed to update income", statusCode: code);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final data = e.response?.data;
+
+      final msg = (data is Map)
+        ? (data['detail'] ?? data['message'] ?? data['Message'] ?? 'Network Error').toString()
+        : e.message ?? 'Network error';
+
+      throw ApiException('Update income failed: $msg', statusCode: code);
+    } catch (e) {
+      throw ApiException('Unexpected error: $e');
+    }
+  }
+
+
 }

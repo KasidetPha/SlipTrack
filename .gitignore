@@ -48,3 +48,4 @@ app.*.map.json
 .buildlog/
 .svn/
 migrate_working_dir/
+frontend/.env
