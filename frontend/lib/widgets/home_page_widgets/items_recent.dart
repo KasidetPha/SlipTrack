@@ -52,7 +52,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
   }
 
   Future<void> _openEditModal(ReceiptItem item) async {
-    final bool? updated = await showModalBottomSheet<bool>(
+    final result = await showModalBottomSheet<ReceiptItem>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -68,7 +68,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
 
     if (!mounted) return;
 
-    if (updated == true) {
+    if (result != null) {
       setState(() {
         _futureItems = _load();
       });

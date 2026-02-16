@@ -1,9 +1,5 @@
-import 'dart:convert';
-
 import 'package:dio/dio.dart';
-import 'package:flutter/cupertino.dart';
 import 'package:frontend/models/budget_model.dart';
-import 'package:frontend/models/category_detail.dart';
 import 'package:frontend/models/category_summary.dart';
 import 'package:frontend/models/category_total.dart';
 import 'package:frontend/models/first_Username_icon.dart';
@@ -533,6 +529,49 @@ class ReceiptService {
         : e.message ?? 'Network error';
 
         throw ApiException(msg, statusCode: code);
+    }
+  }
+
+  Future<void> createBatchReceipt({
+    required String merchantName,
+    required DateTime receiptDate,
+    required double totalAmount,
+    required List<ReceiptItem> items,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final body = {
+        "merchant_name": merchantName,
+        "receipt_date": DateFormat('yyyy-MM-dd').format(receiptDate),
+        "total_amount": totalAmount,
+        "items": items.map((e) => {
+          "item_name": e.item_name,
+          "quantity": e.quantity,
+          "total_price": e.total_price,
+          "category_id": e.category_id
+        }).toList()
+      };
+
+      final res = await _dio.post(
+        '/receipts/batch',
+        data: body,
+        cancelToken: cancelToken
+      );
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return;
+      }
+
+      throw ApiException('Failed to save batch', statusCode: res.statusCode);
+
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final dynamic data = e.response?.data;
+
+      final String msg = (data is Map && data['detail'] != null)
+        ? data['detail'].toString()
+        : e.message ?? 'Network error';
+      throw ApiException(msg, statusCode: code);
     }
   }
 }

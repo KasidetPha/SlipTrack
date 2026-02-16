@@ -64,3 +64,13 @@ uvloop==0.22.1
 watchfiles==1.1.1
 wcwidth==0.6.0
 websockets==15.0.1
+=======
+fastapi>=0.110,<1.0
+uvicorn[standard]>=0.22,<0.32
+aiomysql>=0.2.0,<1.0
+PyJWT>=2.8,<3.0
+python-dotenv>=1.0,<2.0
+pydantic>=2.5,<3.0
+bcrypt>=4.0,<5.0
+python-multipart>=0.0.9
+cryptography
