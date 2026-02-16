@@ -4,23 +4,43 @@ import jwt
 import hashlib
 from datetime import datetime, timedelta, timezone, date
 from typing import Optional, List, Any
+from contextlib import asynccontextmanager
+import tempfile
+import google.generativeai as genai
 
 import aiomysql
-from fastapi import FastAPI, Depends, HTTPException, status, Body, Path, Query
+import base64
+import json
+import httpx
+from fastapi import FastAPI, Depends, HTTPException, status, Body, Path, Query, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
+from image_utils import preprocess_receipt_image
+
+
 load_dotenv()
+
+TYPHOON_API_KEY = os.getenv("TYPHOON_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    gemini_model = genai.GenerativeModel(
+        "gemini-2.5-flash", 
+        generation_config={"response_mime_type": "application/json"}
+    )
 
 # config
 
-MYSQL_HOST = os.getenv("MYSQL_HOST", "localhost")
-MYSQL_USER = os.getenv("MYSQL_USER", "root")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "password1234")
-MYSQL_DB = os.getenv("MYSQL_DB", "sliptrack")
-MYSQL_PORT = int(os.getenv("MYSQL_PORT", "3306"))
+MYSQL_HOST = os.getenv("DB_HOST", "localhost")
+MYSQL_USER = os.getenv("DB_USER", "root")
+MYSQL_PASSWORD = os.getenv("DB_PASSWORD", "password1234")
+MYSQL_DB = os.getenv("DB_NAME", "sliptrack")
+MYSQL_PORT = int(os.getenv("DB_PORT", "3307"))
+
 POOL_MIN = int(os.getenv("MYSQL_POOL_MIN", "1"))
 POOL_MAX = int(os.getenv("MYSQL_POOL_MAX", "10"))
 
@@ -30,24 +50,16 @@ JWT_ALGORITHM = "HS256"
 
 TZ = timezone(timedelta(hours=7))  # Asia/Bangkok
 
-# App & middlewares
 
-app = FastAPI(title="SlipTrack FastAPI")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
 
 # DB Pool (aiomysql)
 
-pool: aiomysql.Pool | None = None
+pool: Optional[aiomysql.Pool] = None
 
-@app.on_event("startup")
-async def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     global pool
+    print("Connecting to Database...")
     pool = await aiomysql.create_pool(
         host=MYSQL_HOST,
         port=MYSQL_PORT,
@@ -59,13 +71,22 @@ async def startup():
         maxsize=POOL_MAX,
         charset="utf8mb4"
     )
-    
-@app.on_event("shutdown")
-async def shutdown():
-    global pool
+    yield
+    print("Closing Database...")
     if pool:
         pool.close()
         await pool.wait_closed()
+        
+# App & middlewares
+
+app = FastAPI(title="SlipTrack FastAPI", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
         
 # Auth helpers
 
@@ -201,7 +222,72 @@ class MonthlyComparisionResponse(BaseModel):
     percent_change: float
     message: str = "ok"
     
+class BoundingBox(BaseModel):
+    x: int
+    y: int
+    w: int
+    h: int
+    
+class ReceiptItem(BaseModel):
+    name: str
+    price: float
+    qty: int
+    date: str
+    category_id: Optional[int] = None
+    bounding_box: Optional[BoundingBox] = None
+    
+class ScanResponse(BaseModel):
+    status: str
+    merchant_name: str
+    items: List[ReceiptItem]
+    total_amount: float
+    
+class ReceiptItemBatchRequest(BaseModel):
+    item_name: str
+    quantity: int
+    total_price: float
+    category_id: int
+    
+class ReceiptBatchCreateRequest(BaseModel):
+    merchant_name: str
+    receipt_date: date
+    total_amount: float
+    items: List[ReceiptItemBatchRequest]
+    
+class UpdateIncomeBody(BaseModel):
+    income_source: str
+    amount: float
+    category_id: int
+    income_date: date
+    
+def encode_image(image_bytes: bytes) -> str:
+    return base64.b64encode(image_bytes).decode('utf-8')
 
+# 1. Mapping ให้ตรงกับ Database ของคุณ
+CATEGORY_MAP = {
+    "Others": 1, 
+    "Food": 2, 
+    "Shopping": 3, 
+    "Bills": 4, 
+    "Transportation": 5
+}
+
+# 2. Keywords สำหรับช่วยจัดกลุ่ม (ลำดับความสำคัญสูงกว่า AI)
+FOOD_KWS = ["ข้าว", "น้ำ", "นม", "ขนม", "อาหาร", "drink", "snack", "noodle"]
+SUPPLY_KWS = ["ทิชชู่", "สบู่", "แชมพู", "ผงซักฟอก", "tissue", "soap", "mask", "ครีม"]
+
+def auto_assign_category(item_name: str, ai_category: str) -> int:
+    name = item_name.lower()
+    
+    # เช็ค Keyword ก่อน (แม่นยำกว่าสำหรับของไทย)
+    if any(k in name for k in FOOD_KWS): 
+        return CATEGORY_MAP["Food"]
+    if any(k in name for k in SUPPLY_KWS): 
+        return CATEGORY_MAP["Shopping"]
+        
+    # ถ้าไม่เจอ Keyword ให้ใช้ที่ AI วิเคราะห์มา (เช็ค Case-insensitive)
+    # ai_category ควรส่งมาเป็น "Food", "Shopping", "Bills" ฯลฯ
+    return CATEGORY_MAP.get(ai_category, CATEGORY_MAP["Others"])
     
 # route
 async def _get_budget_data(
@@ -280,7 +366,7 @@ async def _get_budget_data(
 @app.get('/')
 async def root():
     return {
-        "msg": "hello fastAPI"
+        "msg": "hello fastAPI V.2"
     }
     
 # login
@@ -891,7 +977,7 @@ async def monthly_comparison(
     sql = f"""
         SELECT
             COALESCE(SUM(CASE
-                WHEN MONTH({date_col}) = %s AND YEAR({date_col} = %s THEN {amount_col}
+                WHEN MONTH({date_col}) = %s AND YEAR({date_col}) = %s THEN {amount_col}
                 ELSE 0
             END), 0) as this_month_total,
             COALESCE(SUM(CASE
@@ -918,9 +1004,9 @@ async def monthly_comparison(
     
     if last_month == 0:
         if this_month > 0:
-            percent_change == 100.0
+            percent_change = 100.0
         elif this_month < 0:
-            percent_change == -100.0
+            percent_change = -100.0
         else:
             percent_change = 0.0
     else:
@@ -931,6 +1017,266 @@ async def monthly_comparison(
         "last_month": last_month,
         "percent_change": percent_change
     }
+    
+@app.post("/scan-receipt", response_model=ScanResponse)
+async def scan_receipt(file: UploadFile = File(...)):
+    tmp_path = None
+    try:
+        # 1. อ่านไฟล์ที่ส่งมาจาก Flutter เป็น Bytes
+        image_bytes = await file.read()
+        
+        # 2. ส่งไปทำความสะอาด จะได้ไฟล์ .png ชั่วคราวกลับมา
+        tmp_path = preprocess_receipt_image(image_bytes)
+        
+        # ลบส่วนนี้ออกได้เลยครับ เพราะ tmp_path มีไฟล์ที่พร้อมใช้งานแล้ว
+        # with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
+        #     tmp.write(await file.read())
+        #     tmp_path = tmp.name
+
+        # 3. Step 1: สกัดข้อความด้วย Typhoon OCR
+        from typhoon_ocr import ocr_document
+        raw_text = ocr_document(tmp_path)
+        
+        # 4. Step 2: ส่งข้อความดิบให้ Gemini 
+        allowed_cats = ", ".join([f'"{k}"' for k in CATEGORY_MAP.keys()])
+        prompt = f"""
+        Extract data from this Thai receipt text. 
+        Rules:
+        - Return ONLY JSON.
+        - 'category' MUST be one of: [{allowed_cats}].
+        - Format date as YYYY-MM-DD.
+        - Ignore non-item rows (Vat, Discount, Total).
+
+        Receipt Text:
+        {raw_text}
+        
+        Target JSON Structure:
+        {{
+          "merchant_name": "string",
+          "total_amount": float,
+          "items": [
+            {{"name": "string", "price": float, "qty": int, "date": "string", "category": "string"}}
+          ]
+        }}
+        """
+
+        response = gemini_model.generate_content(prompt)
+        
+        # แนะนำให้เพิ่มการคลีน JSON ตรงนี้เพื่อกันพังตอน Gemini ส่ง Markdown มาครับ
+        raw_response = response.text.strip()
+        if raw_response.startswith("```json"):
+            raw_response = raw_response[7:-3]
+        elif raw_response.startswith("```"):
+            raw_response = raw_response[3:-3]
+            
+        ai_data = json.loads(raw_response)
+
+        # 5. Step 3: ประกอบร่างข้อมูลเพื่อส่งกลับให้ Flutter
+        final_items = []
+        fallback_date = datetime.now().strftime("%Y-%m-%d")
+        
+        for it in ai_data.get("items", []):
+            item_name = it.get("name", "Unknown")
+            ai_suggested_cat = it.get("category", "Others")
+            
+            final_items.append(ReceiptItem(
+                name=item_name,
+                price=float(it.get("price", 0.0)),
+                qty=int(it.get("qty", 1)),
+                date=it.get("date", fallback_date),
+                category_id=auto_assign_category(item_name, ai_suggested_cat),
+                bounding_box=BoundingBox(x=0, y=0, w=0, h=0) 
+            ))
+
+        return {
+            "status": "success",
+            "merchant_name": ai_data.get("merchant_name", "ไม่ทราบชื่อร้าน"),
+            "total_amount": float(ai_data.get("total_amount", 0.0)),
+            "items": final_items
+        }
+
+    except Exception as e:
+        print(f"Server Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        # ลบไฟล์ชั่วคราวออกจากระบบ Linux
+        if tmp_path and os.path.exists(tmp_path):
+            os.remove(tmp_path)
+                
+    # return {
+    #     "status": "success",
+    #     "merchant_name": "CP Axtra PCL พงษ์เพชร",
+    #     "items": [
+    #         {
+    #         "name": "กล้วยหอม ถุง 4 ลูก",
+    #         "price": 29,
+    #         "qty": 2,
+    #         "date": "2025-10-20",
+    #         "category_id": 2,
+    #         "bounding_box": {
+    #             "x": 0,
+    #             "y": 0,
+    #             "w": 0,
+    #             "h": 0
+    #         }
+    #         },
+    #         {
+    #         "name": "เบญจรงค์ ข้าวหอมมะลิ 100% 5กก.",
+    #         "price": 182,
+    #         "qty": 1,
+    #         "date": "2025-10-20",
+    #         "category_id": 2,
+    #         "bounding_box": {
+    #             "x": 0,
+    #             "y": 0,
+    #             "w": 0,
+    #             "h": 0
+    #         }
+    #         },
+    #         {
+    #         "name": "ARO ไข่ขาวเหลวพาสเจอร์ไรซ์ 2 กก.",
+    #         "price": 174,
+    #         "qty": 1,
+    #         "date": "2025-10-20",
+    #         "category_id": 2,
+    #         "bounding_box": {
+    #             "x": 0,
+    #             "y": 0,
+    #             "w": 0,
+    #             "h": 0
+    #         }
+    #         },
+    #         {
+    #         "name": "ชันชายนั่นมโปรตีนสูงช็อกโกแลต340X3",
+    #         "price": 135,
+    #         "qty": 1,
+    #         "date": "2025-10-20",
+    #         "category_id": 2,
+    #         "bounding_box": {
+    #             "x": 0,
+    #             "y": 0,
+    #             "w": 0,
+    #             "h": 0
+    #         }
+    #         }
+    #     ],
+    #     "total_amount": 520
+    # }
+    
+@app.post("/debug-image")
+async def debug_image(file: UploadFile = File(...)):
+    """API สำหรับอัปโหลดรูปและดูผลลัพธ์ Pre-processing โดยเฉพาะ"""
+    image_bytes = await file.read()
+    
+    # โยนเข้าฟังก์ชันทำความสะอาดภาพ
+    tmp_path = preprocess_receipt_image(image_bytes)
+    
+    # คืนค่ากลับไปเป็นไฟล์รูปภาพ (เบราว์เซอร์จะแสดงรูปให้เห็นทันที)
+    return FileResponse(tmp_path, media_type="image/png")
+    
+@app.post("/receipts/batch")
+async def create_batch_receipt(
+    body: ReceiptBatchCreateRequest,
+    auth: TokenPayload = Depends(require_auth),
+    db_pool: aiomysql.Pool = Depends(get_db_conn)
+):
+    async with db_pool.acquire() as conn:
+        async with conn.cursor(aiomysql.DictCursor) as cur:
+            try:
+                await conn.begin()
+                
+                sql_receipt = """
+                    INSERT INTO receipts
+                    (user_id, store_name, receipt_date, total_amount, source, created_at)
+                    VALUES (%s, %s, %s, %s, 'ocr', NOW())
+                """
+                
+                await cur.execute(sql_receipt, (
+                    auth.id,
+                    body.merchant_name,
+                    body.receipt_date,
+                    body.total_amount
+                ))
+                
+                receipt_id = cur.lastrowid
+                
+                if body.items:
+                    item_values = []
+                    
+                    for item in body.items:
+                        qty = item.quantity if item.quantity > 0 else 1
+                        unit_price = item.total_price / qty
+                        
+                        item_values.append((
+                            receipt_id,
+                            item.category_id,
+                            item.item_name,
+                            item.quantity,
+                            unit_price,
+                            item.total_price
+                        ))
+                        
+                    sql_items = """
+                        INSERT INTO receipt_items
+                        (receipt_id, category_id, item_name, quantity, unit_price, total_price)
+                        VALUES (%s, %s, %s, %s, %s, %s)
+                    """
+                    
+                    await cur.executemany(sql_items, item_values)
+                
+                await conn.commit()
+                
+                return {
+                    "message": "Receipt saved successfully",
+                    "receipt_id": receipt_id
+                }
+                    
+                        
+            except Exception as e:
+                await conn.rollback()
+                print(f"Error saving batch: {e}")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"Failed to save  receipt: {str(e)}"
+                )
+                
+@app.put("/incomes/{id}")
+async def update_income(
+    id: int = Path(..., ge=1),
+    body: UpdateIncomeBody = Body(...),
+    auth: TokenPayload = Depends(require_auth),
+    db_pool: aiomysql.Pool = Depends(get_db_conn)
+):
+    async with db_pool.acquire() as conn:
+        try:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await conn.begin()
+                
+                await cur.execute(
+                    "SELECT income_id FROM incomes WHERE income_id = %s AND user_id = %s",
+                    (id, auth.id)
+                )
+                owner = await cur.fetchone()                
+                if not owner:
+                    await conn.rollback()
+                    raise HTTPException(status_code=404, detail="Income not found or unauthorized")
+                
+                await cur.execute(
+                    """
+                        UPDATE incomes
+                        SET income_source=%s, amount=%s, income_category_id=%s, income_date=%s
+                        WHERE income_id=%s AND user_id=%s
+                    """,
+                    (body.income_source, body.amount, body.category_id, body.income_date, id, auth.id)
+                )
+                
+                await conn.commit()
+                return {"message": "Income updated successfully", "income_id": id}
+        except HTTPException:
+            raise
+        except Exception as e:
+            await conn.rollback()
+            raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
