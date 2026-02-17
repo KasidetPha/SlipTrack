@@ -1278,44 +1278,6 @@ async def update_income(
             await conn.rollback()
             raise HTTPException(status_code=500, detail=f"Internal server error: {e}")
 
-if __name__ == "__main__":
-=======
-import uvicorn
-import os
-import jwt
-import hashlib
-from datetime import datetime, timedelta, timezone, date
-from typing import Optional, List, Any
-from contextlib import asynccontextmanager
-
-import aiomysql
-from fastapi import FastAPI, Depends, HTTPException, status, Body, Path, Query, File, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, Field
-from dotenv import load_dotenv
-
-load_dotenv()
-
-# config
-
-MYSQL_HOST = os.getenv("DB_HOST", "localhost")
-MYSQL_USER = os.getenv("DB_USER", "root")
-MYSQL_PASSWORD = os.getenv("DB_PASSWORD", "password1234")
-MYSQL_DB = os.getenv("DB_NAME", "sliptrack")
-MYSQL_PORT = int(os.getenv("DB_PORT", "3307"))
-
-POOL_MIN = int(os.getenv("MYSQL_POOL_MIN", "1"))
-POOL_MAX = int(os.getenv("MYSQL_POOL_MAX", "10"))
-
-JWT_SECRET = os.getenv("JWT_SECRET", "sliptrackVersion1")
-JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "1"))
-JWT_ALGORITHM = "HS256"
-
-TZ = timezone(timedelta(hours=7))  # Asia/Bangkok
-
-
-
 # DB Pool (aiomysql)
 
 pool: aiomysql.Pool | None = None
@@ -1595,7 +1557,7 @@ async def _get_budget_data(
 @app.get('/')
 async def root():
     return {
-        "msg": "hello fastAPI"
+        "msg": "hello fastAPI V.12"
     }
     
 # login
