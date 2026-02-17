@@ -45,11 +45,20 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
   late int _categoryId;
 
   PriceMode _priceMode = PriceMode.total;
+  bool get _isIncome => widget.item.entryType == 'income';
 
   bool _saving = false;
   final _dateFmt = DateFormat('dd/MM/yyyy');
 
-  static const _categoryOptions = <Map<String, dynamic>>[
+  // static const _categoryOptions = <Map<String, dynamic>>[
+  //   {'id': 1, 'name': 'Others'},
+  //   {'id': 2, 'name': 'Food'},
+  //   {'id': 3, 'name': 'Shopping'},
+  //   {'id': 4, 'name': 'Bills'},
+  //   {'id': 5, 'name': 'Transportation'},
+  // ];
+
+  static const _expenseCategoryOptions = <Map<String, dynamic>>[
     {'id': 1, 'name': 'Others'},
     {'id': 2, 'name': 'Food'},
     {'id': 3, 'name': 'Shopping'},
@@ -57,6 +66,15 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
     {'id': 5, 'name': 'Transportation'},
   ];
 
+  static const _incomeCategoryOptions = <Map<String, dynamic>>[
+    {'id': 1, 'name': 'Salary'},
+    {'id': 2, 'name': 'Wages'},
+    {'id': 3, 'name': 'Gift'},
+    {'id': 4, 'name': 'Sales'},
+  ];
+
+  List<Map<String, dynamic>> get _currentCategoryOptions =>
+    _isIncome ? _incomeCategoryOptions : _expenseCategoryOptions;
 
   static const _prefKeyPriceMode = 'edit_receipt_price_mode';
 
@@ -160,11 +178,15 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
     _unitPriceCtrl = TextEditingController(text: unit.toStringAsFixed(2));
 
     _date = widget.item.receiptDate;
-    _categoryId = _categoryOptions.any((c) => c['id'] == widget.item.category_id)
+    _categoryId = _currentCategoryOptions.any((c) => c['id'] == widget.item.category_id)
       ? widget.item.category_id
-      : _categoryOptions.first['id'] as int;
+      : _currentCategoryOptions.first['id'] as int;
 
     _loadPriceMode();
+
+    if (_isIncome) {
+      _priceMode = PriceMode.total;
+    }
   }
 
   @override
@@ -226,9 +248,11 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final qty = _qty();
+    final qty = _isIncome ? 1 : _qty();
 
-    final totalPrice = _priceMode == PriceMode.unit ? _unitPrice() * qty : _totalPrice();
+    final totalPrice = _isIncome
+      ? double.tryParse(_priceCtrl.text) ?? 0.0
+      : (_priceMode == PriceMode.unit ? _unitPrice() * qty : _totalPrice());
 
     final updatedItem = widget.item.copyWith(
       item_name: _nameCtrl.text.trim(),
@@ -245,14 +269,24 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
       setState(() => _saving = true);
 
       try {
-        await ReceiptService().updateReceiptItem(
-          id: updatedItem.item_id,
-          itemName: updatedItem.item_name,
-          quantity: updatedItem.quantity,
-          totalPrice: updatedItem.total_price,
-          receiptDate: updatedItem.receiptDate,
-          categoryId: updatedItem.category_id
-        );
+        if (_isIncome) {
+          await ReceiptService().updateIncome(
+            id: updatedItem.item_id, 
+            incomeSource: updatedItem.item_name, 
+            amount: updatedItem.total_price, 
+            incomeDate: updatedItem.receiptDate, 
+            categoryId: updatedItem.category_id
+          );
+        } else {
+          await ReceiptService().updateReceiptItem(
+            id: updatedItem.item_id,
+            itemName: updatedItem.item_name,
+            quantity: updatedItem.quantity,
+            totalPrice: updatedItem.total_price,
+            receiptDate: updatedItem.receiptDate,
+            categoryId: updatedItem.category_id
+          );
+        }
       
         if (!mounted) return;
         Navigator.pop(context, updatedItem);
@@ -364,209 +398,232 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                         validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
                       const SizedBox(height: 12,),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Quantity', style: GoogleFonts.prompt(fontSize: 12, color: _AppColors.text),),
-                                const SizedBox(height: 6,),
-                                Container(
-                                  height: _fieldHeight,
-                                  alignment: Alignment.center,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: _AppColors.border),
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.center,
-                                    children: [
-                                      IconButton(
-                                        onPressed: () {
-                                          final n = int.tryParse(_qtyCtrl.text) ?? 1;
-                                          if (n > 1) _qtyCtrl.text = (n-1).toString();
-                                          // setState(() {});
-                                          _onQtyChange();
-                                        },
-                                        icon: const Icon(Icons.remove_rounded)
-                                      ),
-                                      Expanded(
-                                        child: TextFormField(
-                                          controller: _qtyCtrl,
-                                          textAlign: TextAlign.center,
-                                          keyboardType: TextInputType.number,
-                                          textInputAction: TextInputAction.next,
-                                          decoration: const InputDecoration(
-                                            border: InputBorder.none,
-                                            isCollapsed: true,
-                                            contentPadding: EdgeInsets.symmetric(vertical: 14),
-                                          ),
-                                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                                          onChanged: (_) => _onQtyChange(),
-                                          validator: (v) {
-                                            final n = int.tryParse(v ?? '');
-                                            if (n == null || n <= 0) return 'Quantity must be >= 1';
-                                            return null;
-                                          }
+                      if (!_isIncome) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Quantity', style: GoogleFonts.prompt(fontSize: 12, color: _AppColors.text),),
+                                  const SizedBox(height: 6,),
+                                  Container(
+                                    height: _fieldHeight,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      color: Colors.white,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: _AppColors.border),
+                                    ),
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.center,
+                                      children: [
+                                        IconButton(
+                                          onPressed: () {
+                                            final n = int.tryParse(_qtyCtrl.text) ?? 1;
+                                            if (n > 1) _qtyCtrl.text = (n-1).toString();
+                                            // setState(() {});
+                                            _onQtyChange();
+                                          },
+                                          icon: const Icon(Icons.remove_rounded)
                                         ),
-                                      ),
-                                      IconButton(
-                                        onPressed: () {
-                                          final n = int.tryParse(_qtyCtrl.text) ?? 1;
-                                          _qtyCtrl.text = (n+1).toString();
-                                          // setState(() {});
-                                          _onQtyChange();
-                                        },
-                                        icon: Icon(Icons.add_rounded)
-                                      ),
-                                    ],
+                                        Expanded(
+                                          child: TextFormField(
+                                            controller: _qtyCtrl,
+                                            textAlign: TextAlign.center,
+                                            keyboardType: TextInputType.number,
+                                            textInputAction: TextInputAction.next,
+                                            decoration: const InputDecoration(
+                                              border: InputBorder.none,
+                                              isCollapsed: true,
+                                              contentPadding: EdgeInsets.symmetric(vertical: 14),
+                                            ),
+                                            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                            onChanged: (_) => _onQtyChange(),
+                                            validator: (v) {
+                                              final n = int.tryParse(v ?? '');
+                                              if (n == null || n <= 0) return 'Quantity must be >= 1';
+                                              return null;
+                                            }
+                                          ),
+                                        ),
+                                        IconButton(
+                                          onPressed: () {
+                                            final n = int.tryParse(_qtyCtrl.text) ?? 1;
+                                            _qtyCtrl.text = (n+1).toString();
+                                            // setState(() {});
+                                            _onQtyChange();
+                                          },
+                                          icon: Icon(Icons.add_rounded)
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              ],
-                            )
-                          ),
-                          const SizedBox(width: 12,),
-                          
-                          // mode
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text("Price Mode", style: GoogleFonts.prompt(fontSize: 12, color: _AppColors.text),),
-                                const SizedBox(height: 6,),
-                                Container(
-                                  height: _fieldHeight,
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white,
-                                    borderRadius: BorderRadius.circular(12),
-                                    // border: Border.all(color: _AppColors.border)
-                                  ),
-                                  clipBehavior: Clip.antiAlias,
-                                  child: Container(
+                                ],
+                              )
+                            ),
+                            const SizedBox(width: 12,),
+                            
+                            // mode
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text("Price Mode", style: GoogleFonts.prompt(fontSize: 12, color: _AppColors.text),),
+                                  const SizedBox(height: 6,),
+                                  Container(
                                     height: _fieldHeight,
                                     width: double.infinity,
                                     decoration: BoxDecoration(
+                                      color: Colors.white,
                                       borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: _AppColors.border)
+                                      // border: Border.all(color: _AppColors.border)
                                     ),
-                                    child: Row(
-                                      children: [
-                                        Expanded(
-                                          child: _buildPriceModeChip(
-                                            mode: PriceMode.unit, 
-                                            title: "Unit", 
-                                            subtitle: "(฿/item)", 
-                                            isLeft: true
-                                          )
-                                        ),
-                                        Container(width: 1, color: Colors.transparent,),
-                                        Expanded(child: _buildPriceModeChip(mode: PriceMode.total, title: 'Total', subtitle: "(฿)", isLeft: false))
-                                      ],
-                                    ),
-                                  )
-                                ),
-                              ],
-                            ),
-                          )
-                        ],
-                      ),
-                      const SizedBox(height: 12,),
-                      
-                      if (_priceMode == PriceMode.unit) ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Unit Price (฿)', style: GoogleFonts.prompt(fontSize: 12),),
-                                  const SizedBox(height: 6,),
-                                  TextFormField(
-                                    controller: _unitPriceCtrl,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    textInputAction: TextInputAction.next,
-                                    decoration: _input(hint: 'เช่น 12.50', prefix: '฿'),
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))
-                                    ],
-                                    onChanged: (_) => _recalcFromUnit(),
-                                    validator: (v) {
-                                      final n = double.tryParse(v ?? '');
-                                      if (n == null || n < 0) return 'Price must be >= 0';
-                                      return null;
-                                    }
+                                    clipBehavior: Clip.antiAlias,
+                                    child: Container(
+                                      height: _fieldHeight,
+                                      width: double.infinity,
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(color: _AppColors.border)
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: _buildPriceModeChip(
+                                              mode: PriceMode.unit, 
+                                              title: "Unit", 
+                                              subtitle: "(฿/item)", 
+                                              isLeft: true
+                                            )
+                                          ),
+                                          Container(width: 1, color: Colors.transparent,),
+                                          Expanded(child: _buildPriceModeChip(mode: PriceMode.total, title: 'Total', subtitle: "(฿)", isLeft: false))
+                                        ],
+                                      ),
+                                    )
                                   ),
                                 ],
-                              )
-                            ),
-                            const SizedBox(width: 12,),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Total Price (฿)', style: GoogleFonts.prompt(fontSize: 12),),
-                                  const SizedBox(height: 6,),
-                                  TextFormField(
-                                    readOnly: true,
-                                    controller: _priceCtrl,
-                                    decoration: _input(hint: 'เช่น 100.00', prefix: '฿', fillColor: Colors.grey[200]),
-                                    // onChanged: (_) => _recalcFromTotal(),
-                                    validator: null
-                                  ),
-                                ],
-                              )
-                            )
-                          ],
-                        )
-                      ] else ...[
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Unit Price (฿)', style: GoogleFonts.prompt(fontSize: 12),),
-                                  const SizedBox(height: 6,),
-                                  TextFormField(
-                                    controller: _unitPriceCtrl,
-                                    decoration: _input(hint: 'เช่น 12.50', prefix: '฿', fillColor: Colors.grey[200]),
-                                    validator: null,
-                                    // onChanged: (_) => _recalcFromUnit(),
-                                  ),
-                                ],
-                              )
-                            ),
-                            const SizedBox(width: 12,),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Total Price (฿)', style: GoogleFonts.prompt(fontSize: 12),),
-                                  const SizedBox(height: 6,),
-                                  TextFormField(
-                                    controller: _priceCtrl,
-                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                    textInputAction: TextInputAction.done,
-                                    decoration: _input(hint: 'เช่น 100.00', prefix: '฿',),
-                                    inputFormatters: [
-                                      FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))
-                                    ],
-                                    validator: (v) {
-                                      final n = double.tryParse(v ?? '');
-                                      if (n == null || n < 0) return 'Price must be >= 0';
-                                      return null;
-                                    },
-                                    onChanged: (_) => _recalcFromTotal(),
-                                  ),
-                                ],
-                              )
+                              ),
                             )
                           ],
                         )
                       ],
+                      const SizedBox(height: 12,),
+                      
+                      if (_isIncome) ...[
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Amount (฿)', style: GoogleFonts.prompt(fontSize: 12),),
+                            const SizedBox(height: 6,),
+                            TextFormField(
+                              controller: _priceCtrl,
+                              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                              decoration: _input(hint: "ระบุจำนวนเงิน", prefix: "฿"),
+                              validator: (v) {
+                                final n = double.tryParse(v ?? '');
+                                if (n == null || n < 0) return 'Price must be >= 0';
+                                return null;
+                              },
+                            )
+                          ],
+                        )
+                      ] else ...[
+
+                        if (_priceMode == PriceMode.unit) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Unit Price (฿)', style: GoogleFonts.prompt(fontSize: 12),),
+                                    const SizedBox(height: 6,),
+                                    TextFormField(
+                                      controller: _unitPriceCtrl,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      textInputAction: TextInputAction.next,
+                                      decoration: _input(hint: 'เช่น 12.50', prefix: '฿'),
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))
+                                      ],
+                                      onChanged: (_) => _recalcFromUnit(),
+                                      validator: (v) {
+                                        final n = double.tryParse(v ?? '');
+                                        if (n == null || n < 0) return 'Price must be >= 0';
+                                        return null;
+                                      }
+                                    ),
+                                  ],
+                                )
+                              ),
+                              const SizedBox(width: 12,),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Total Price (฿)', style: GoogleFonts.prompt(fontSize: 12),),
+                                    const SizedBox(height: 6,),
+                                    TextFormField(
+                                      readOnly: true,
+                                      controller: _priceCtrl,
+                                      decoration: _input(hint: 'เช่น 100.00', prefix: '฿', fillColor: Colors.grey[200]),
+                                      // onChanged: (_) => _recalcFromTotal(),
+                                      validator: null
+                                    ),
+                                  ],
+                                )
+                              )
+                            ],
+                          )
+                        ] else ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Unit Price (฿)', style: GoogleFonts.prompt(fontSize: 12),),
+                                    const SizedBox(height: 6,),
+                                    TextFormField(
+                                      controller: _unitPriceCtrl,
+                                      decoration: _input(hint: 'เช่น 12.50', prefix: '฿', fillColor: Colors.grey[200]),
+                                      validator: null,
+                                      // onChanged: (_) => _recalcFromUnit(),
+                                    ),
+                                  ],
+                                )
+                              ),
+                              const SizedBox(width: 12,),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Total Price (฿)', style: GoogleFonts.prompt(fontSize: 12),),
+                                    const SizedBox(height: 6,),
+                                    TextFormField(
+                                      controller: _priceCtrl,
+                                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                      textInputAction: TextInputAction.done,
+                                      decoration: _input(hint: 'เช่น 100.00', prefix: '฿',),
+                                      inputFormatters: [
+                                        FilteringTextInputFormatter.allow(RegExp(r'^\d*\.?\d{0,2}'))
+                                      ],
+                                      validator: (v) {
+                                        final n = double.tryParse(v ?? '');
+                                        if (n == null || n < 0) return 'Price must be >= 0';
+                                        return null;
+                                      },
+                                      onChanged: (_) => _recalcFromTotal(),
+                                    ),
+                                  ],
+                                )
+                              )
+                            ],
+                          )
+                        ],
+                      ]
                     ]
                   )
                 ),
@@ -603,7 +660,7 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                         child: DropdownButtonFormField<int>(
                           value: _categoryId,
                           decoration: _input(),
-                          items: _categoryOptions
+                          items: _currentCategoryOptions
                             .map((c) => DropdownMenuItem<int>(
                               value: c['id'] as int,
                               child: Text(c['name'] as String),
