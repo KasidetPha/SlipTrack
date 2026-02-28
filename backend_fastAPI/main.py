@@ -6,7 +6,8 @@ from datetime import datetime, timedelta, timezone, date
 from typing import Optional, List, Any
 from contextlib import asynccontextmanager
 import tempfile
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
 import aiomysql
 import base64
@@ -22,15 +23,12 @@ from image_utils import preprocess_receipt_image
 
 load_dotenv()
 
-TYPHOON_API_KEY = os.getenv("TYPHOON_API_KEY", "")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+api_key = os.getenv("GEMINI_API_KEY", "")
 
-if GEMINI_API_KEY:
-    genai.configure(api_key=GEMINI_API_KEY)
-    gemini_model = genai.GenerativeModel(
-        "gemini-2.5-flash", 
-        generation_config={"response_mime_type": "application/json"}
-    )
+if not api_key:
+    raise ValueError("ไม่พบ GEMINI_API_KEY ในไฟล์ .env ครับ")
+
+gemini_client = genai.Client(api_key=api_key)
 
 # config
 MYSQL_HOST = os.getenv("DB_HOST", "localhost")
@@ -296,7 +294,7 @@ async def _get_budget_data(
                     warning_enabled,
                     warning_percentage,
                     overspending_enabled
-                FROM budget_settings
+                FROM budget
                 WHERE user_id = %s
                 """,
                 (user_id,),
@@ -315,19 +313,20 @@ async def _get_budget_data(
             await cur.execute(
                 """
                 SELECT
-                    ec.category_id,
-                    ec.category_name,
-                    ec.icon_name,
-                    ec.color_hex,
+                    c.category_id,
+                    c.category_name,
+                    c.icon_name,
+                    c.color_hex,
                     COALESCE(eb.amount, 0) AS limit_amount
-                FROM expense_categories ec
+                FROM categories c
                 LEFT JOIN expense_budgets eb
-                    ON eb.category_id = ec.category_id
+                    ON eb.category_id = c.category_id
                     AND eb.user_id = %s
                     AND eb.year = %s
                     AND eb.month = %s
-                WHERE (ec.user_id = %s OR ec.is_default = 1)
-                ORDER BY ec.category_name ASC
+                WHERE (c.user_id = %s OR c.is_default = 1)
+                    AND c.category_type = 'EXPENSE'
+                ORDER BY c.category_name ASC
                 """,
                 (user_id, year, month, user_id),
             )
@@ -397,24 +396,24 @@ async def receipt_item_categories(
     
     sql = """
         SELECT 
-            ec.category_id,
-            ec.category_name,
-            ec.icon_name,
-            ec.color_hex,
-            SUM(ri.total_price) AS total_spent
-        FROM receipt_items ri
-        LEFT JOIN expense_categories ec
-            ON ec.category_id = ri.category_id
-        LEFT JOIN receipts r
-            ON r.receipt_id = ri.receipt_id
-        WHERE r.user_id = %s
-            AND MONTH(r.receipt_date) = %s
-            AND YEAR(r.receipt_date)  = %s
+            c.category_id,
+            c.category_name,
+            c.icon_name,
+            c.color_hex,
+            SUM(ei.total_price) AS total_spent
+        FROM expense_items ei
+        LEFT JOIN categories c
+            ON c.category_id = ei.category_id
+        LEFT JOIN expense_transactions et
+            ON et.transaction_id = ei.transaction_id
+        WHERE et.user_id = %s
+            AND MONTH(et.receipt_date) = %s
+            AND YEAR(et.receipt_date)  = %s
         GROUP BY
-            ec.category_id,
-            ec.category_name,
-            ec.icon_name,
-            ec.color_hex
+            c.category_id,
+            c.category_name,
+            c.icon_name,
+            c.color_hex
         ORDER BY total_spent DESC
         LIMIT 2;
     """
@@ -441,50 +440,50 @@ async def receipt_item(
     sql = """
         (
             SELECT
-                ri.item_id                             AS item_id,
+                ei.item_id                             AS item_id,
                 u.full_name                            AS full_name,
-                ri.total_price                         AS total_price,
-                ri.item_name                           AS item_name,
-                r.receipt_date                         AS tx_date,
-                ri.quantity                            AS quantity,
-                ec.category_id                         AS category_id,
-                ec.icon_name                           AS icon_name,
-                ec.color_hex                           AS color_hex,
+                ei.total_price                         AS total_price,
+                ei.item_name                           AS item_name,
+                et.receipt_date                         AS tx_date,
+                ei.quantity                            AS quantity,
+                c.category_id                         AS category_id,
+                c.icon_name                           AS icon_name,
+                c.color_hex                           AS color_hex,
                 'expense'                              AS entry_type,
-                r.created_at                           AS created_at
-            FROM receipts r
+                et.created_at                           AS created_at
+            FROM expense_transactions et
             LEFT JOIN users u
-                ON u.user_id = r.user_id
-            LEFT JOIN receipt_items ri
-                ON ri.receipt_id = r.receipt_id
-            LEFT JOIN expense_categories ec
-                ON ec.category_id = ri.category_id
-            WHERE r.user_id = %s
-            AND MONTH(r.receipt_date) = %s
-            AND YEAR(r.receipt_date)  = %s
+                ON u.user_id = et.user_id
+            LEFT JOIN expense_items ei
+                ON ei.transaction_id = et.transaction_id
+            LEFT JOIN categories c
+                ON c.category_id = ei.category_id
+            WHERE et.user_id = %s
+            AND MONTH(et.receipt_date) = %s
+            AND YEAR(et.receipt_date)  = %s
         )
         UNION ALL
         (
             SELECT
-                i.income_id                            AS item_id,
+                it.income_id                           AS item_id,
                 u.full_name                            AS full_name,
-                i.amount                               AS total_price,
-                COALESCE(i.income_source, ic.income_category_name, 'รายรับ')      AS item_name,
-                i.income_date                          AS tx_date,
-                1                                      AS quantity,          -- ไม่มี quantity เลยใส่ 1 ไว้
-                ic.income_category_id                  AS category_id,
-                ic.icon_name                           AS icon_name,
-                ic.color_hex                           AS color_hex,
+                it.amount                              AS total_price,
+                COALESCE(it.income_source, c.category_id, 'รายรับ')      AS item_name,
+                it.income_date                         AS tx_date,
+                1                                      AS quantity,
+                c.category_id                          AS category_id,
+                c.icon_name                            AS icon_name,
+                c.color_hex                            AS color_hex,
                 'income'                               AS entry_type,
-                i.created_at                           AS created_at
-            FROM incomes i
+                it.created_at                          AS created_at
+            FROM income_transactions it
             LEFT JOIN users u
-                ON u.user_id = i.user_id
-            LEFT JOIN income_categories ic
-                ON ic.income_category_id = i.income_category_id
-            WHERE i.user_id = %s
-            AND MONTH(i.income_date) = %s
-            AND YEAR(i.income_date)  = %s
+                ON u.user_id = it.user_id
+            LEFT JOIN categories c
+                ON c.category_id = it.category_id
+            WHERE it.user_id = %s
+            AND MONTH(it.income_date) = %s
+            AND YEAR(it.income_date)  = %s
         )
         ORDER BY tx_date DESC, created_at DESC
     """
@@ -494,7 +493,7 @@ async def receipt_item(
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(sql, (auth.id, finalMonth, finalYear, auth.id, finalMonth, finalYear))
             rows = await cur.fetchall()
-            await conn.commit()
+            # await conn.commit()
             return rows
         
 @app.post("/monthlyTotal")
@@ -509,16 +508,16 @@ async def monthlyTotal(
     
     sql = """
         SELECT
-        (SELECT COALESCE(SUM(i.amount), 0)
-        FROM incomes i
-        WHERE i.user_id = %s
-            AND MONTH(i.income_date) = %s
-            AND YEAR(i.income_date)  = %s) AS income_total_amount,
-        (SELECT COALESCE(SUM(r.total_amount), 0)
-        FROM receipts r
-        WHERE r.user_id = %s
-            AND MONTH(r.receipt_date) = %s
-            AND YEAR(r.receipt_date)  = %s) AS expense_total_amount;
+        (SELECT COALESCE(SUM(it.amount), 0)
+        FROM income_transactions it
+        WHERE it.user_id = %s
+            AND MONTH(it.income_date) = %s
+            AND YEAR(it.income_date)  = %s) AS income_total_amount,
+        (SELECT COALESCE(SUM(et.total_amount), 0)
+        FROM expense_transactions et
+        WHERE et.user_id = %s
+            AND MONTH(et.receipt_date) = %s
+            AND YEAR(et.receipt_date)  = %s) AS expense_total_amount;
     """
     
     async with db_pool.acquire() as conn:
@@ -562,45 +561,45 @@ async def categories_summary(
     
     sql_main = """
         SELECT 
-            cate.category_id,
-            cate.category_name,
-            cate.icon_name,
-            cate.color_hex,
+            c.category_id,
+            c.category_name,
+            c.icon_name,
+            c.color_hex,
             COALESCE(SUM(
                 CASE 
-                    WHEN re.user_id = %s
-                        AND MONTH(re.receipt_date) = %s
-                        AND YEAR(re.receipt_date)  = %s
-                    THEN ri.total_price
+                    WHEN et.user_id = %s
+                        AND MONTH(et.receipt_date) = %s
+                        AND YEAR(et.receipt_date)  = %s
+                    THEN ei.total_price
                 END
             ), 0) AS total,
             COALESCE(COUNT(
                 CASE 
-                    WHEN re.user_id = %s
-                        AND MONTH(re.receipt_date) = %s
-                        AND YEAR(re.receipt_date)  = %s
-                    THEN ri.item_name
+                    WHEN et.user_id = %s
+                        AND MONTH(et.receipt_date) = %s
+                        AND YEAR(et.receipt_date)  = %s
+                    THEN ei.item_name
                 END
             ), 0) AS item_count
-        FROM expense_categories AS cate
-        LEFT JOIN receipt_items AS ri
-            ON ri.category_id = cate.category_id
-        LEFT JOIN receipts AS re
-            ON re.receipt_id = ri.receipt_id
+        FROM categories AS c
+        LEFT JOIN expense_items AS ei
+            ON ei.category_id = c.category_id
+        LEFT JOIN expense_transactions AS et
+            ON et.transaction_id = ei.transaction_id
         GROUP BY
-            cate.category_id,
-            cate.category_name,
-            cate.icon_name,
-            cate.color_hex
+            c.category_id,
+            c.category_name,
+            c.icon_name,
+            c.color_hex
         ORDER BY total DESC;
     """
     
     sql_total_month = """
         SELECT COALESCE(SUM(total_amount), 0) AS total_month
-        FROM receipts AS re
-        WHERE re.user_id = %s
-            AND MONTH(re.receipt_date) = %s
-            AND YEAR(re.receipt_date) = %s
+        FROM expense_transactions AS et
+        WHERE et.user_id = %s
+            AND MONTH(et.receipt_date) = %s
+            AND YEAR(et.receipt_date) = %s
     """
     
     async with db_pool.acquire() as conn:
@@ -630,16 +629,16 @@ async def update_receipt_item(
                 await cur.execute(
                     """                 
                         SELECT 
-                            ri.item_id,
-                            ri.item_name,
-                            ri.quantity,
-                            ri.total_price,
-                            ri.category_id,
-                            re.receipt_id AS rid,
-                            re.receipt_date AS tx_date
-                        FROM receipt_items ri
-                        JOIN receipts re ON re.receipt_id = ri.receipt_id
-                        WHERE ri.item_id = %s
+                            ei.item_id,
+                            ei.item_name,
+                            ei.quantity,
+                            ei.total_price,
+                            ei.category_id,
+                            et.transaction_id AS tid,
+                            et.receipt_date AS tx_date
+                        FROM expense_items ei
+                        JOIN expense_transactions et ON et.transaction_id = ei.transaction_id
+                        WHERE ei.item_id = %s
                     """,
                     (id,)
                 )
@@ -652,7 +651,7 @@ async def update_receipt_item(
                 # update item
                 await cur.execute(
                     """
-                        UPDATE receipt_items
+                        UPDATE expense_items
                         SET item_name=%s, quantity=%s, total_price=%s, category_id=%s
                         WHERE item_id=%s
                     """,
@@ -661,18 +660,18 @@ async def update_receipt_item(
                 
                 if body.receipt_date:
                     await cur.execute(
-                        "UPDATE receipts SET receipt_date=%s WHERE receipt_id=%s",
-                        (body.receipt_date, owner["rid"])
+                        "UPDATE expense_transactions SET receipt_date=%s WHERE transaction_id=%s",
+                        (body.receipt_date, owner["tid"])
                     )
                     
                 await cur.execute(
                 """                 
                     SELECT 
-                        ri.item_id, ri.item_name, ri.quantity, ri.total_price, ri.category_id,
-                        re.receipt_date
-                    FROM receipt_items ri
-                    JOIN receipts re ON re.receipt_id = ri.receipt_id
-                    WHERE ri.item_id = %s
+                        ei.item_id, ei.item_name, ei.quantity, ei.total_price, ei.category_id,
+                        et.receipt_date
+                    FROM expense_items ei
+                    JOIN expense_transactions et ON et.transaction_id = ei.transaction_id
+                    WHERE ei.item_id = %s
                 """, (id,)
                 )
                 
@@ -700,24 +699,24 @@ async def items_in_category(
     
     sql = """
         SELECT 
-            ri.item_id       AS item_id,
-            ri.item_name     AS item_name,
-            ri.quantity      AS quantity,
-            ri.total_price   AS total_price,
-            ri.category_id   AS category_id,
-            re.receipt_date  AS tx_date,
-            ec.icon_name     AS icon_name,
-            ec.color_hex     AS color_hex
-        FROM receipt_items ri
-        JOIN receipts re
-            ON re.receipt_id  = ri.receipt_id
-        JOIN expense_categories ec
-            ON ec.category_id = ri.category_id
-        WHERE ri.category_id       = %s
-        AND re.user_id           = %s
-        AND MONTH(re.receipt_date) = %s
-        AND YEAR(re.receipt_date)  = %s
-        ORDER BY re.receipt_date DESC, ri.item_id DESC
+            ei.item_id       AS item_id,
+            ei.item_name     AS item_name,
+            ei.quantity      AS quantity,
+            ei.total_price   AS total_price,
+            ei.category_id   AS category_id,
+            et.receipt_date  AS tx_date,
+            c.icon_name      AS icon_name,
+            c.color_hex      AS color_hex
+        FROM expense_items ei
+        JOIN expense_transactions et
+            ON et.transaction_id  = ei.transaction_id
+        JOIN categories c
+            ON c.category_id = ei.category_id
+        WHERE ei.category_id       = %s
+        AND et.user_id             = %s
+        AND MONTH(et.receipt_date) = %s
+        AND YEAR(et.receipt_date)  = %s
+        ORDER BY et.receipt_date DESC, ei.item_id DESC
     """
 
     
@@ -735,26 +734,17 @@ async def get_category_master(
 ):
     sql = """
         SELECT
-            ec.category_id       AS category_id,
-            ec.category_name     AS category_name,
-            'expense'            AS entry_type,
-            ec.icon_name         AS icon_name,
-            ec.color_hex         AS color_hex
-        FROM expense_categories ec
-
-        UNION ALL
-
-        SELECT
-            ic.income_category_id   AS category_id,
-            ic.income_category_name AS category_name,
-            'income'                AS entry_type,
-            ic.icon_name            AS icon_name,
-            ic.color_hex            AS color_hex
-        FROM income_categories ic
-
-        ORDER BY entry_type, category_id;
+            c.category_id       AS category_id,
+            c.category_name     AS category_name,
+            CASE
+                WHEN c.category_type = 'EXPENSE' THEN 'expense'
+                ELSE 'income'
+            END AS entry_type,
+            c.icon_name         AS icon_name,
+            c.color_hex         AS color_hex
+        FROM categories c
+        ORDER BY entry_type DESC, category_id
     """
-
     
     async with db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
@@ -789,7 +779,7 @@ async def update_budgets(
                 
                 await cur.execute(
                     """
-                    INSERT INTO budget_settings
+                    INSERT INTO budget
                         (user_id, warning_enabled, warning_percentage, overspending_enabled)
                     VALUES (%s, %s, %s, %s)
                     ON DUPLICATE KEY UPDATE
@@ -844,7 +834,13 @@ async def create_income(
                 await conn.begin()
                 
                 await cur.execute(
-                    "SELECT income_category_id FROM income_categories WHERE income_category_name = %s AND (user_id = %s OR is_default = 1) LIMIT 1",
+                    """
+                    SELECT category_id FROM categories
+                    WHERE category_name = %s
+                        AND category_type = 'INCOME'
+                        AND (user_id = %s OR is_default = 1)
+                    LIMIT 1
+                    """,
                     (body.category_name, auth.id)
                 )
                 cat_row = await cur.fetchone()
@@ -852,11 +848,11 @@ async def create_income(
                 if not cat_row:
                     raise HTTPException(status_code = 400, detail=f"Category {body.category_name} not found")
                 
-                category_id = cat_row["income_category_id"]
+                category_id = cat_row["category_id"]
                 
                 sql = """
-                    INSERT INTO incomes
-                    (user_id, income_category_id, amount, income_date, income_source, note, created_at)
+                    INSERT INTO income_transactions
+                    (user_id, category_id, amount, income_date, income_source, note, created_at)
                     VALUES (%s, %s, %s, %s, %s, %s, NOW())
                 """
                 
@@ -889,9 +885,10 @@ async def create_expense(
                 
                 await cur.execute(
                     """
-                    SELECT category_id FROM expense_categories
+                    SELECT category_id FROM categories
                     WHERE category_name = %s
-                    AND (user_id = %s OR is_default = 1)
+                        AND category_type = 'EXPENSE'
+                        AND (user_id = %s OR is_default = 1)
                     LIMIT 1
                     """,
                     (body.category_name, auth.id)
@@ -904,7 +901,7 @@ async def create_expense(
                 category_id = cat_row["category_id"]
                 
                 sql_receipt = """
-                    INSERT INTO receipts
+                    INSERT INTO expense_transactions
                     (user_id, store_name, receipt_date, total_amount, source, note, created_at)
                     VALUEs (%s, %s, %s, %s, 'manual', %s, NOW())
                 """
@@ -917,16 +914,16 @@ async def create_expense(
                     body.note
                 ))
                 
-                receipt_id = cur.lastrowid
+                transaction_id = cur.lastrowid
                 
                 sql_item = """
-                    INSERT INTO receipt_items
-                    (receipt_id, category_id, item_name, quantity, unit_price, total_price)
+                    INSERT INTO expense_items
+                    (transaction_id, category_id, item_name, quantity, unit_price, total_price)
                     VALUES (%s, %s, %s, %s, %s, %s)
                 """
                 
                 await cur.execute(sql_item, (
-                    receipt_id,
+                    transaction_id,
                     category_id,
                     body.item_name,
                     1,
@@ -935,7 +932,7 @@ async def create_expense(
                 ))
                 
                 await conn.commit()
-                return {"message": "Expense created successfully", "receipt": receipt_id}
+                return {"message": "Expense created successfully", "receipt": transaction_id}
             except HTTPException as he:
                 await conn.rollback()
                 raise he
@@ -957,12 +954,12 @@ async def monthly_comparison(
         prev_month = body.month - 1
         prev_year = body.year
         
-    table_name = 'receipts'
+    table_name = 'expense_transactions'
     date_col = 'receipt_date'
     amount_col = 'total_amount'
     
     if body.type == "income":
-        table_name = "incomes"
+        table_name = "income_transactions"
         date_col = "income_date"
         amount_col = "amount"
         
@@ -1010,91 +1007,170 @@ async def monthly_comparison(
         "percent_change": percent_change
     }
     
+# @app.post("/scan-receipt", response_model=ScanResponse)
+# async def scan_receipt(file: UploadFile = File(...)):
+#     tmp_path = None
+#     try:
+#         # 1. อ่านไฟล์ที่ส่งมาจาก Flutter เป็น Bytes
+#         image_bytes = await file.read()
+        
+#         # 2. ส่งไปทำความสะอาด จะได้ไฟล์ .png ชั่วคราวกลับมา
+#         # สมมติว่าฟังก์ชันนี้คืนค่า path ของไฟล์ที่ clean แล้ว
+#         tmp_path = preprocess_receipt_image(image_bytes)
+        
+#         # โหลดรูปภาพด้วย PIL
+#         from PIL import Image
+#         img = Image.open(tmp_path)
+
+#         # 3. เตรียม Prompt ตามแบบทดสอบ
+#         allowed_cats = ", ".join([f'"{k}"' for k in CATEGORY_MAP.keys()])
+#         prompt = f"""
+#         You are a STRICT OCR data entry machine. Your ONLY job is to transcribe the EXACT Thai characters from the receipt image.
+        
+#         CRITICAL RULES:
+#         1. ZERO HALLUCINATION: Transcribe character-by-character. DO NOT use autocorrect. DO NOT guess brand names.
+#         2. If the text says "ซันชายน์นมโปรตีนสูงช็อกโกแลต340X3", you MUST output exactly that. Do not change it to "ชินนามอนมินิ" or "นมรสจืด". Read the actual pixels.
+#         3. Extract the full merchant name (e.g., "CP Axtra PCL พงษ์เพชร").
+#         4. Look for discount conditions (e.g., "เงื่อนไขส่วนลด"). If found, put the amount as a POSITIVE number in 'discount'. If no discount, 0.0.
+#         5. Validate math: total_amount MUST equal (subtotal - discount).
+#         6. Return ONLY valid JSON. 'category' MUST be one of: [{allowed_cats}].
+#         7. Date format must be YYYY-MM-DD.
+
+#         Target JSON Structure:
+#         {{
+#           "merchant_name": "string",
+#           "receipt_date": "string",
+#           "subtotal": float,
+#           "discount": float,
+#           "total_amount": float,
+#           "items": [
+#             {{
+#               "name": "string (EXACT printed text, NO autocomplete)",
+#               "unit_price": float,
+#               "qty": int,
+#               "total_item_price": float,
+#               "category": "string"
+#             }}
+#           ]
+#         }}
+#         """
+
+#         # 4. เรียกใช้งาน Gemini API ด้วย SDK ใหม่
+#         print("กำลังส่งภาพให้ Gemini ประมวลผล...")
+#         response = gemini_client.models.generate_content(
+#             model='gemini-2.5-flash-lite', # หรือใช้ gemini-2.5-flash ถ้ารองรับ
+#             contents=[prompt, img],
+#             config=types.GenerateContentConfig(
+#                 response_mime_type="application/json"
+#             )
+#         )
+        
+#         # เนื่องจากตั้งค่า response_mime_type เป็น JSON แล้ว ข้อมูลที่ได้น่าจะเป็น JSON ที่ถูกต้องเลย
+#         raw_response = response.text.strip()
+        
+#         # คลีนข้อมูลเผื่อไว้กรณี Gemini ส่ง Markdown block มา
+#         if raw_response.startswith("```json"):
+#             raw_response = raw_response[7:-3]
+#         elif raw_response.startswith("```"):
+#             raw_response = raw_response[3:-3]
+            
+#         ai_data = json.loads(raw_response)
+
+#         # 5. ประกอบร่างข้อมูลเพื่อส่งกลับให้ Flutter
+#         final_items = []
+#         fallback_date = ai_data.get("receipt_date", datetime.now().strftime("%Y-%m-%d"))
+        
+#         for it in ai_data.get("items", []):
+#             item_name = it.get("name", "Unknown")
+#             ai_suggested_cat = it.get("category", "Others")
+            
+#             # แปลงโครงสร้างให้ตรงกับ ReceiptItem ของคุณ
+#             final_items.append(ReceiptItem(
+#                 name=item_name,
+#                 price=float(it.get("unit_price", 0.0)), # ใช้ unit_price จาก prompt
+#                 qty=int(it.get("qty", 1)),
+#                 date=fallback_date, # ใช้ date จากใบเสร็จ
+#                 category_id=auto_assign_category(item_name, ai_suggested_cat),
+#                 bounding_box=BoundingBox(x=0, y=0, w=0, h=0) 
+#             ))
+
+#         return {
+#             "status": "success",
+#             "merchant_name": ai_data.get("merchant_name", "ไม่ทราบชื่อร้าน"),
+#             "total_amount": float(ai_data.get("total_amount", 0.0)),
+#             "items": final_items
+#         }
+
+#     except Exception as e:
+#         print(f"Server Error: {str(e)}")
+#         raise HTTPException(status_code=500, detail=str(e))
+#     finally:
+#         # ลบไฟล์ชั่วคราวออกจากระบบ
+#         if tmp_path and os.path.exists(tmp_path):
+#             os.remove(tmp_path)
+
 @app.post("/scan-receipt", response_model=ScanResponse)
-async def scan_receipt(file: UploadFile = File(...)):
-    tmp_path = None
-    try:
-        # 1. อ่านไฟล์ที่ส่งมาจาก Flutter เป็น Bytes
-        image_bytes = await file.read()
-        
-        # 2. ส่งไปทำความสะอาด จะได้ไฟล์ .png ชั่วคราวกลับมา
-        tmp_path = preprocess_receipt_image(image_bytes)
-        
-        # ลบส่วนนี้ออกได้เลยครับ เพราะ tmp_path มีไฟล์ที่พร้อมใช้งานแล้ว
-        # with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as tmp:
-        #     tmp.write(await file.read())
-        #     tmp_path = tmp.name
-
-        # 3. Step 1: สกัดข้อความด้วย Typhoon OCR
-        from typhoon_ocr import ocr_document
-        raw_text = ocr_document(tmp_path)
-        
-        # 4. Step 2: ส่งข้อความดิบให้ Gemini 
-        allowed_cats = ", ".join([f'"{k}"' for k in CATEGORY_MAP.keys()])
-        prompt = f"""
-        Extract data from this Thai receipt text. 
-        Rules:
-        - Return ONLY JSON.
-        - 'category' MUST be one of: [{allowed_cats}].
-        - Format date as YYYY-MM-DD.
-        - Ignore non-item rows (Vat, Discount, Total).
-
-        Receipt Text:
-        {raw_text}
-        
-        Target JSON Structure:
-        {{
-          "merchant_name": "string",
-          "total_amount": float,
-          "items": [
-            {{"name": "string", "price": float, "qty": int, "date": "string", "category": "string"}}
-          ]
-        }}
-        """
-
-        response = gemini_model.generate_content(prompt)
-        
-        # แนะนำให้เพิ่มการคลีน JSON ตรงนี้เพื่อกันพังตอน Gemini ส่ง Markdown มาครับ
-        raw_response = response.text.strip()
-        if raw_response.startswith("```json"):
-            raw_response = raw_response[7:-3]
-        elif raw_response.startswith("```"):
-            raw_response = raw_response[3:-3]
-            
-        ai_data = json.loads(raw_response)
-
-        # 5. Step 3: ประกอบร่างข้อมูลเพื่อส่งกลับให้ Flutter
-        final_items = []
-        fallback_date = datetime.now().strftime("%Y-%m-%d")
-        
-        for it in ai_data.get("items", []):
-            item_name = it.get("name", "Unknown")
-            ai_suggested_cat = it.get("category", "Others")
-            
-            final_items.append(ReceiptItem(
-                name=item_name,
-                price=float(it.get("price", 0.0)),
-                qty=int(it.get("qty", 1)),
-                date=it.get("date", fallback_date),
-                category_id=auto_assign_category(item_name, ai_suggested_cat),
-                bounding_box=BoundingBox(x=0, y=0, w=0, h=0) 
-            ))
-
-        return {
-            "status": "success",
-            "merchant_name": ai_data.get("merchant_name", "ไม่ทราบชื่อร้าน"),
-            "total_amount": float(ai_data.get("total_amount", 0.0)),
-            "items": final_items
+async def scan_receipt():
+    return {
+        "status": "success",
+        "merchant_name": "CP Axtra PCL พงษ์เพชร",
+        "items": [
+            {
+            "name": "กล้วยหอม กุ้ง 4 ลูก",
+            "price": 29,
+            "qty": 2,
+            "date": "2025-10-20",
+            "category_id": 2,
+            "bounding_box": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0
+            }
+            },
+            {
+            "name": "เบญจรงค์ ข้าวหอมมะลิ 100% 5กก.",
+            "price": 182,
+            "qty": 1,
+            "date": "2025-10-20",
+            "category_id": 2,
+            "bounding_box": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0
+            }
+            },
+            {
+            "name": "ARO ไข่ขาวเหลวสปาร์โร่โชว์ 2 กก.",
+            "price": 174,
+            "qty": 1,
+            "date": "2025-10-20",
+            "category_id": 2,
+            "bounding_box": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0
+            }
+            },
+            {
+            "name": "ซันชายน์นมโปรตีนสูงช็อกโกแลต340X3",
+            "price": 135,
+            "qty": 1,
+            "date": "2025-10-20",
+            "category_id": 2,
+            "bounding_box": {
+                "x": 0,
+                "y": 0,
+                "w": 0,
+                "h": 0
+            }
+            }
+        ],
+        "total_amount": 520
         }
 
-    except Exception as e:
-        print(f"Server Error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        # ลบไฟล์ชั่วคราวออกจากระบบ Linux
-        if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
-                
 @app.post("/debug-image")
 async def debug_image(file: UploadFile = File(...)):
     """API สำหรับอัปโหลดรูปและดูผลลัพธ์ Pre-processing โดยเฉพาะ"""
@@ -1119,7 +1195,7 @@ async def create_batch_receipt(
                 await conn.begin()
                 
                 sql_receipt = """
-                    INSERT INTO receipts
+                    INSERT INTO expense_transactions
                     (user_id, store_name, receipt_date, total_amount, source, created_at)
                     VALUES (%s, %s, %s, %s, 'ocr', NOW())
                 """
@@ -1131,7 +1207,7 @@ async def create_batch_receipt(
                     body.total_amount
                 ))
                 
-                receipt_id = cur.lastrowid
+                transaction_id = cur.lastrowid
                 
                 if body.items:
                     item_values = []
@@ -1141,7 +1217,7 @@ async def create_batch_receipt(
                         unit_price = item.total_price / qty
                         
                         item_values.append((
-                            receipt_id,
+                            transaction_id,
                             item.category_id,
                             item.item_name,
                             item.quantity,
@@ -1150,8 +1226,8 @@ async def create_batch_receipt(
                         ))
                         
                     sql_items = """
-                        INSERT INTO receipt_items
-                        (receipt_id, category_id, item_name, quantity, unit_price, total_price)
+                        INSERT INTO expense_items
+                        (transaction_id, category_id, item_name, quantity, unit_price, total_price)
                         VALUES (%s, %s, %s, %s, %s, %s)
                     """
                     
@@ -1161,7 +1237,7 @@ async def create_batch_receipt(
                 
                 return {
                     "message": "Receipt saved successfully",
-                    "receipt_id": receipt_id
+                    "transaction_id": transaction_id
                 }
                     
                         
@@ -1186,7 +1262,7 @@ async def update_income(
                 await conn.begin()
                 
                 await cur.execute(
-                    "SELECT income_id FROM incomes WHERE income_id = %s AND user_id = %s",
+                    "SELECT income_id FROM income_transactions WHERE income_id = %s AND user_id = %s",
                     (id, auth.id)
                 )
                 owner = await cur.fetchone()                
@@ -1196,8 +1272,8 @@ async def update_income(
                 
                 await cur.execute(
                     """
-                        UPDATE incomes
-                        SET income_source=%s, amount=%s, income_category_id=%s, income_date=%s
+                        UPDATE income_transactions
+                        SET income_source=%s, amount=%s, category_id=%s, income_date=%s
                         WHERE income_id=%s AND user_id=%s
                     """,
                     (body.income_source, body.amount, body.category_id, body.income_date, id, auth.id)
