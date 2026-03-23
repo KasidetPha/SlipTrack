@@ -258,7 +258,7 @@ class _ExpenseCardState extends State<ExpenseCard> {
                       children: [
                         Icon(arrowIcon, color: arrowColor,size: 25,),
                         SizedBox(width: 6,),
-                        Text("Expenses", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
+                        Text("Expense", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
                       ],
                     ),
                     SizedBox(height: 6,),

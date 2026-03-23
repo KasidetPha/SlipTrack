@@ -124,14 +124,6 @@ class _ItemsRecentState extends State<ItemsRecent> {
     }
   }
 
-  // Future<List<DailyGroup>> _loadGroupedData() async {
-  //   final List<ReceiptItem> rawItems = await _load();
-
-    
-
-
-  // }
-
   String _buildDateLabel(DateTime date) {
     final now = DateTime.now();
 
@@ -140,10 +132,11 @@ class _ItemsRecentState extends State<ItemsRecent> {
     final bool isCurrentFilter = widget.selectedMonth == now.month && widget.selectedYear == now.year;
 
     if (isSameDate && isCurrentFilter) {
-      return 'Today ${date.day}';
+      final dateToday = DateFormat('d MMM').format(date);
+      return 'Today, ${dateToday}';
     } else {
-      final weekday = DateFormat('EEE').format(date);
-      return '$weekday ${date.day}';
+      final dateNotToday = DateFormat('EEE, d MMM').format(date);
+      return dateNotToday;
     }
   }
 
@@ -185,6 +178,8 @@ class _ItemsRecentState extends State<ItemsRecent> {
               print(item.item_name);
               final DateTime dateOnly = DateUtils.dateOnly(item.receiptDate);
 
+              final String formattedDate = DateFormat('EEE, d MMM').format(dateOnly);
+
               DateTime? previousDate;
 
               if (index > 0) {
@@ -220,7 +215,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
 
               final bool isIncome = item.entryType == 'income';
 
-              final String transactionLabel = isIncome ? 'Income' : 'Expense';
+              // final String transactionLabel = isIncome ? 'Income' : 'Expense';
 
               final Color amountColor = isIncome ? Colors.green.shade600 : Colors.red.shade600;
 
@@ -241,40 +236,66 @@ class _ItemsRecentState extends State<ItemsRecent> {
                         ),
                       ),
                       const SizedBox(height: 6,),
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF9F9F9),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: Colors.black12.withOpacity(0.05)),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Expense', style: GoogleFonts.prompt(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey),),
-                                  SizedBox(height: 5,),
-                                  Text("-${currencyTh.format(dailyExpense)}", style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red.shade700),),
-                                ],
-                              )
-                            ),
-                            Container(width: 1, height: 48, decoration: BoxDecoration(border: Border.all(color: Colors.black12)),),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text('Income', style: GoogleFonts.prompt(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.grey),),
-                                  SizedBox(height: 5,),
-                                  Text("+${currencyTh.format(dailyIncome)}", style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green.shade700),)
-                                ],
-                              )
-                            )
-                          ],
-                        ),
+                      Column(
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.green.shade50,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.black12.withOpacity(0.05)),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.04),
+                                        offset: const Offset(0,2),
+                                        blurRadius: 6
+                                      )
+                                    ]
+                                  ),
+                                  
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text('Income', style: GoogleFonts.prompt(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.green.shade600),),
+                                      Text("+${currencyTh.format(dailyIncome)}", style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green.shade600),)
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 16,),
+                              Expanded(
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade50,
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(color: Colors.black12.withOpacity(0.05)),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: Colors.black.withOpacity(0.04),
+                                        offset: const Offset(0,2),
+                                        blurRadius: 6
+                                      )
+                                    ]
+                                  ),
+                                  
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.end,
+                                    children: [
+                                      Text('Expense', style: GoogleFonts.prompt(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.red.shade600),),
+                                      Text("-${currencyTh.format(dailyExpense)}", style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red.shade600),),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ],
+                          )
+                        ],
                       ),
-                      SizedBox(height: 12,),
+                      SizedBox(height: 16,),
                     ],
                     InkWell(
                       onTap:() => _openEditModal(item),
@@ -282,7 +303,7 @@ class _ItemsRecentState extends State<ItemsRecent> {
                       child: Container(
                         width: double.infinity,
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: isIncome ? Colors.green.shade50 : Colors.red.shade50,
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
                             color: Colors.black12,
@@ -320,13 +341,31 @@ class _ItemsRecentState extends State<ItemsRecent> {
                                       child: Column(
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            transactionLabel, 
-                                            style: GoogleFonts.prompt(
-                                              color: Colors.black.withOpacity(0.85),
-                                              fontSize: 16, 
-                                              fontWeight: FontWeight.w700
-                                            ),
+                                          Row(
+                                            crossAxisAlignment: CrossAxisAlignment.baseline,
+                                            textBaseline: TextBaseline.alphabetic,
+                                            children: [
+                                              Flexible(
+                                                child: Text(
+                                                  item.item_name,
+                                                  style: GoogleFonts.prompt(
+                                                    color: isIncome ? Colors.green.shade600 : Colors.red.shade600,
+                                                    fontSize: 16, 
+                                                    fontWeight: FontWeight.w700
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              Text(
+                                                isIncome ? '' :
+                                                " x${item.quantity}",
+                                                style: GoogleFonts.prompt(
+                                                  color: Colors.grey,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                           const SizedBox(height: 4),
                                       
@@ -336,22 +375,15 @@ class _ItemsRecentState extends State<ItemsRecent> {
                                             children: [
                                               Flexible(
                                                 child: Text(
-                                                  item.item_name,
+                                                  item.note ?? '',
                                                   style: GoogleFonts.prompt(
-                                                    fontWeight: FontWeight.w500,
+                                                    fontWeight: FontWeight.w400,
                                                     fontSize: 14,
+                                                    color: Colors.black54
                                                   ),
                                                   maxLines: 1,                
                                                   overflow: TextOverflow.ellipsis,
                                                   softWrap: true,
-                                                ),
-                                              ),
-                                              Text(
-                                                " x${item.quantity}",
-                                                style: GoogleFonts.prompt(
-                                                  // fontWeight: FontWeight.w500,
-                                                  color: Colors.grey,
-                                                  fontSize: 12,
                                                 ),
                                               ),
                                             ],
@@ -366,7 +398,6 @@ class _ItemsRecentState extends State<ItemsRecent> {
                               const SizedBox(width: 12),
                       
                               Column(
-                                // mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 crossAxisAlignment: CrossAxisAlignment.end,
                                 children: [
                                   Text(

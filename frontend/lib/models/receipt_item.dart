@@ -1,5 +1,20 @@
 import 'package:frontend/widgets/scan_page_widgets/scan_body.dart';
 
+class BoundingBox {
+  final int x, y, w, h;
+
+  BoundingBox({required this.x, required this. y, required this. w, required this. h});
+
+    factory BoundingBox.fromJson(Map<String, dynamic>json) {
+      return BoundingBox(
+        x: json['x'] ?? 0,
+        y: json['y'] ?? 0,
+        w: json['w'] ?? 0,
+        h: json['h'] ?? 0,
+      );
+    }
+}
+
 class ReceiptItem {
   final int item_id;
   final String item_name;
@@ -7,10 +22,12 @@ class ReceiptItem {
   final DateTime receiptDate;
   final int quantity;
   final int category_id;
+  final String? note;
   final String entryType;
   final String? iconName;
   final String? colorHex;
   final String source;
+  final BoundingBox? boundingBox;
 
   ReceiptItem({
     required this.item_id, 
@@ -19,11 +36,12 @@ class ReceiptItem {
     required this.receiptDate, 
     required this.quantity, 
     required this.category_id,
+    this.note,
     required this.entryType,
     this.iconName,
     this.colorHex,
-
     required this.source,
+    this.boundingBox,
   });
 
   factory ReceiptItem.fromJson(Map<String, dynamic>j) {
@@ -45,6 +63,7 @@ class ReceiptItem {
       receiptDate: _dt(j['tx_date']),
       quantity: _i(j['quantity'] ?? 1), 
       category_id: _i(j['category_id']),
+      note: j['note']?? j['note'],
       entryType: j['entry_type']?.toString() ?? '',
       iconName: j['icon_name'] != null ? j['icon_name'].toString() : null,
       colorHex: j['color_hex'] != null ? j['color_hex'].toString() : null,
@@ -52,6 +71,7 @@ class ReceiptItem {
         ?? j['store_name']?.toString()
         ?? j['income_source']?.toString()
         ?? 'Unknown',
+      boundingBox: j['bounding_box'] != null ? BoundingBox.fromJson(j['bounding_box']) : null
     );
   }
 
@@ -62,10 +82,12 @@ class ReceiptItem {
     DateTime? receiptDate,
     int? quantity,
     int? category_id,
-    String?entryType,
-    String?iconName,
-    String?colorHex,
-    String?source,
+    String? note,
+    String? entryType,
+    String? iconName,
+    String? colorHex,
+    String? source,
+    BoundingBox? boundingBox,
   }) {
     return ReceiptItem(
       item_id: item_id ?? this.item_id, 
@@ -74,10 +96,12 @@ class ReceiptItem {
       receiptDate: receiptDate ?? this.receiptDate, 
       quantity: quantity ?? this.quantity, 
       category_id: category_id ?? this.category_id, 
+      note: note ?? this.note,
       entryType: entryType ?? this.entryType, 
       iconName: iconName ?? this.iconName,
       colorHex: colorHex ?? this.colorHex,
       source: source ?? this.source,
+      boundingBox: boundingBox ?? this.boundingBox
     );
   }
 
@@ -90,8 +114,10 @@ class ReceiptItem {
       receiptDate: r.date,
       quantity: r.qty,
       category_id: finalCatId,
+      // note: r.note,
       entryType: r.amount < 0 ? 'expense' : 'income',
       source: 'scan',
+      boundingBox: r.boundingBox
     );
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
@@ -7,10 +8,13 @@ import 'package:frontend/models/receipt_item.dart';
 import 'package:frontend/services/receipt_service.dart';
 import 'package:frontend/utils/transaction_event.dart';
 import 'package:frontend/widgets/Edit_Receipt_Item_Sheet.dart';
+import 'package:frontend/widgets/scan_page_widgets/receipt_preview_overlay.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ScanBody extends StatefulWidget {
   const ScanBody({super.key});
@@ -25,17 +29,31 @@ class _ScanBodyState extends State<ScanBody> {
   bool _isScanning = false;
   bool _isSavingBatch = false;
 
+  File? _lastPickedImage;
+  double _imgWidth = 0;
+  double _imgHeight = 0;
+
+  String _detectedMerchant = "ไม่ทราบชื่อร้าน";
+  DateTime _selectedReceiptDate = DateTime.now();
+
   Future<void> _pickImage(ImageSource source) async {
     if (_isScanning) return;
     try {
       final XFile? photo = await _picker.pickImage(
         source: source, 
-        imageQuality: 80,
-        maxWidth: 1024
+        imageQuality: 100,
       );
 
       if (photo != null) {
         File imageFile = File(photo.path);
+        final decodedImage = await decodeImageFromList(await imageFile.readAsBytes());
+
+        setState(() {
+          _lastPickedImage = imageFile;
+          _imgWidth = decodedImage.width.toDouble();
+          _imgHeight = decodedImage.height.toDouble();
+        });
+        
         await _uploadAndScanReceipt(imageFile);
       }
     } catch (e) {
@@ -51,6 +69,13 @@ class _ScanBodyState extends State<ScanBody> {
       var uri = Uri.parse(scanApiUrl);
       var request = http.MultipartRequest('POST', uri);
 
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+
+      request.headers.addAll({
+        'Authorization': 'Bearer $token'
+      });
+
       request.files.add(await http.MultipartFile.fromPath('file', imageFile.path));
 
       var streamedResponse = await request.send();
@@ -61,10 +86,33 @@ class _ScanBodyState extends State<ScanBody> {
         print("Server Response: $responseBody");
 
         final jsonResponse = jsonDecode(responseBody);
-        
+        _detectedMerchant = jsonResponse['merchant_name'] ?? "ไม่ทราบชื่อร้าน";
+
+        if (jsonResponse['processed_image_base64'] != null) {
+          String base64String = jsonResponse['processed_image_base64'];
+          Uint8List decodedBytes = base64Decode(base64String);
+
+          final tempDir = await getTemporaryDirectory();
+          File processedFile = File('${tempDir.path}/processed_receipt_current.png');
+          await processedFile.writeAsBytes(decodedBytes);
+
+          PaintingBinding.instance.imageCache.evict(FileImage(processedFile));
+          
+          setState(() {
+            _lastPickedImage = processedFile;
+            _imgWidth = (jsonResponse['processed_width'] ?? 0).toDouble();
+            _imgHeight = (jsonResponse['processed_height'] ?? 0).toDouble();
+          });
+        }
 
         if (jsonResponse['items'] is List) {
           final items = _parseItems(jsonResponse['items']);
+          
+          // 🌟 ดึงวันที่จาก OCR มาเป็นค่าเริ่มต้น 🌟
+          if (items.isNotEmpty) {
+            _selectedReceiptDate = items.first.date; 
+          }
+
           if (mounted) {
             _showScanResultSheet(context, items);
           }
@@ -94,12 +142,14 @@ class _ScanBodyState extends State<ScanBody> {
   }
 
   List<ReceiptScanResult> _parseItems(List<dynamic> jsonItems) {
-    return jsonItems.map((item) {
-      final price = double.tryParse(item['price'].toString()) ?? 0.0;
-      final qty = int.tryParse('${item['qty']}')?? 1;
+    // 1. แปลงข้อมูล JSON เป็น Object ตามปกติ
+    final parsedList = jsonItems.map((item) {
+      // รองรับทั้ง key 'price', 'unit_price' และ 'total_item_price'
+      final priceStr = item['price'] ?? item['unit_price'] ?? item['total_item_price'] ?? '0';
+      final price = double.tryParse(priceStr.toString()) ?? 0.0;
+      
+      final qty = int.tryParse('${item['qty']}') ?? 1;
       int catId = int.tryParse('${item['category_id']}') ?? 1;
-
-      print("DEBUG: Item ${item['name']} -> catId: $catId");
 
       DateTime date;
       try {
@@ -107,22 +157,26 @@ class _ScanBodyState extends State<ScanBody> {
       } catch (_) {
         date = DateTime.now();
       }
+      
       return ReceiptScanResult(
-        title: item['name'], 
+        id: UniqueKey().toString(),
+        title: item['name'] ?? 'Unknown', 
         icon: Icons.restaurant, 
         iconBg: const Color(0xFFE67E22), 
         date: date, 
         qty: qty, 
-        amount: -(price * qty),
-        // amount: -1.0 * (item['price'] as num).toDouble(),
-        categoryId: catId
-        // bbox: item['bounding_box'] // TODO เก็บไว้ใช้ทีหลัง
+        amount: -(price * qty), 
+        categoryId: catId,
+        boundingBox: item['bounding_box'] != null
+          ? BoundingBox.fromJson(item['bounding_box'])
+          : null
       );
     }).toList();
+
+    return parsedList.where((item) => item.amount != 0).toList();
   }
 
   Future<void> _saveAllItems(List<ReceiptScanResult> items, BuildContext modalContext) async {
-
     if (items.isEmpty) return;
 
     setState(() => _isSavingBatch = true);
@@ -138,8 +192,8 @@ class _ScanBodyState extends State<ScanBody> {
       }).toList();
 
       await ReceiptService().createBatchReceipt(
-        merchantName: "7-11", // TODO: ดึงจาก OR
-        receiptDate: items.isNotEmpty ? items[0].date : DateTime.now(), 
+        merchantName: _detectedMerchant,
+        receiptDate: _selectedReceiptDate, 
         totalAmount: totalAmount, 
         items: itemsToSave
       );
@@ -148,7 +202,6 @@ class _ScanBodyState extends State<ScanBody> {
 
       if (!mounted) return;
 
-      // Navigator.pop(modalContext);
       Navigator.of(context).popUntil((route) => route.isFirst);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -158,9 +211,6 @@ class _ScanBodyState extends State<ScanBody> {
         )
       );
 
-      // setState(() {
-      //   _isScanning = false;
-      // });
     } catch (e) {
       print("Error saving batch: $e");
       if (mounted) {
@@ -171,7 +221,7 @@ class _ScanBodyState extends State<ScanBody> {
         );
       }
     } finally {
-      if (mounted) setState(() => _isSavingBatch = false) ;
+      if (mounted) setState(() => _isSavingBatch = false);
     }
   }
 
@@ -191,13 +241,7 @@ class _ScanBodyState extends State<ScanBody> {
                   padding: EdgeInsets.zero,
                   color: Colors.grey.withOpacity(0.8),
                 ),
-              //   child: Container(
-              //     decoration: BoxDecoration(
-              //       color: Colors.grey.withOpacity(0.7),
-              //       borderRadius: BorderRadius.circular(12),
-              //     ),
-              //     height: 300,
-              //   ),
+
                 child: Container(
                   decoration: BoxDecoration(
                     color: Colors.grey.withOpacity(0.1),
@@ -238,7 +282,6 @@ class _ScanBodyState extends State<ScanBody> {
                         child: InkWell(
                           onTap: () {
                             _pickImage(ImageSource.camera);
-                            // _showScanResultSheet(context, _items);
                           },
                           child: Container(
                             decoration: BoxDecoration(
@@ -267,7 +310,6 @@ class _ScanBodyState extends State<ScanBody> {
                         child: InkWell(
                           onTap: () {
                             _pickImage(ImageSource.gallery);
-                            // _showScanResultSheet(context, _items);
                           },
                           child: Container(
                             decoration: BoxDecoration(
@@ -322,7 +364,7 @@ class _ScanBodyState extends State<ScanBody> {
     );
   }
 
-  // ====== UI: Modal Bottom Sheet (Scan Results) ======
+// ====== UI: Modal Bottom Sheet (Scan Results) ======
   Future<void> _showScanResultSheet(BuildContext context, List<ReceiptScanResult> items) async {
     final currency = NumberFormat.currency(locale: 'th_TH', symbol: '฿');
     final dateFmt = DateFormat('dd/MM/yyyy');
@@ -339,157 +381,330 @@ class _ScanBodyState extends State<ScanBody> {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setModelState) {
             return DraggableScrollableSheet(
-              initialChildSize: 0.72,
+              initialChildSize: 0.85, 
               minChildSize: 0.5,
               maxChildSize: 0.95,
               expand: false,
               builder: (ctx, scrollCtrl) {
                 final cs = Theme.of(ctx).colorScheme;
-                return Column(
-                  children: [
-                    const SizedBox(height: 8),
-                    // drag handle
-                    Container(
-                      width: 48, height: 5,
-                      decoration: BoxDecoration(
-                        color: cs.outlineVariant, borderRadius: BorderRadius.circular(100),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    // Header
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
+                
+                return CustomScrollView(
+                  controller: scrollCtrl,
+                  slivers: [
+                    
+// --- ส่วนที่ 1: Header และ รูปภาพ ---
+                    SliverToBoxAdapter(
+                      child: Column(
                         children: [
+                          const SizedBox(height: 12),
+                          // Drag handle
                           Container(
-                            padding: const EdgeInsets.all(8),
+                            width: 40,
+                            height: 4,
                             decoration: BoxDecoration(
-                              color: const Color(0xFF10B981).withOpacity(0.12),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(Icons.check_circle, color: Color(0xFF10B981)),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Scan receipt',
-                                    style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.w700)),
-                                Text('รายการที่ตรวจพบจากสลิป',
-                                    style: GoogleFonts.prompt(
-                                        fontSize: 13, color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
-                              ],
+                              color: cs.outlineVariant,
+                              borderRadius: BorderRadius.circular(100),
                             ),
                           ),
-                          Text('${items.length}',
-                              style: GoogleFonts.prompt(
-                                  fontWeight: FontWeight.w800, fontSize: 16, color: cs.primary)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Divider(height: 1),
-                    // List
-                    Expanded(
-                      child: ListView.separated(
-                        controller: scrollCtrl,
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                        itemBuilder: (_, i) {
-                          final it = items[i];
-                          return _ReceiptTile(
-                            icon: it.icon,
-                            iconBg: it.iconBg,
-                            title: it.title,
-                            qtyText: 'x${it.qty}',
-                            dateText: dateFmt.format(it.date),
-                            amountText: currency.format(it.amount.abs()),
-                            isExpense: it.amount < 0,
-                            onTap: () async {
-                              final updated = await showModalBottomSheet<dynamic>(
-                                context: context,
-                                isScrollControlled: true,
-                                useSafeArea: true,
-                                backgroundColor: Theme.of(context).colorScheme.surface,
-                                shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadiusGeometry.vertical(top: Radius.circular(24)),
-                                ),
-                                builder: (_) {
-                                  return EditReceiptItemSheet(
-                                    item: ReceiptItem.fromScanResult(it),
-                                    isScanMode: true,
-                                  );
-                                }
-                              );
-            
-                              if (updated!= null && updated is ReceiptItem) {
-                                setModelState(() {
-                                  items[i] = ReceiptScanResult(
-                                    title: updated.item_name, 
-                                    icon: it.icon, 
-                                    iconBg: it.iconBg, 
-                                    date: updated.receiptDate, 
-                                    qty: updated.quantity, 
-                                    categoryId: updated.category_id,
-                                    amount: updated.entryType == 'expense' ? -updated.total_price : updated.total_price
-                                  );
-                                });
+                          const SizedBox(height: 16),
+                          
+                          // 🌟 ปรับปรุง UI ส่วน Header 🌟
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.03),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  )
+                                ],
+                              ),
+                              child: Column(
+                                children: [
+                                  // Receipt Image Preview
+                                  if (_lastPickedImage != null)
+                                    GestureDetector(
+                                      onTap: () {
+                                        showDialog(
+                                          context: context,
+                                          builder: (BuildContext ctx) {
+                                            return Dialog.fullscreen(
+                                              backgroundColor: Colors.black,
+                                              child: Stack(
+                                                children: [
+                                                  SafeArea(
+                                                    child: Center(
+                                                      child: ReceiptPreviewOverlay(
+                                                        imageFile: _lastPickedImage!,
+                                                        items: items,
+                                                        originalWidth: _imgWidth,
+                                                        originalHeight: _imgHeight
+                                                      ),
+                                                    )
+                                                  ),
+                                                  Positioned(
+                                                    top: 16,
+                                                    right: 16,
+                                                    child: SafeArea(
+                                                      child: CircleAvatar(
+                                                        backgroundColor: Colors.white.withOpacity(0.2),
+                                                        child: IconButton(
+                                                          onPressed: () => Navigator.of(ctx).pop(),
+                                                          icon: const Icon(Icons.close_rounded, color: Colors.white)
+                                                        ),
+                                                      )
+                                                    ),
+                                                  )
+                                                ],
+                                              ),
+                                            );
+                                          }
+                                        );
+                                      },
+                                      child: Container(
+                                        width: double.infinity,
+                                        height: 160, // ลดความสูงรูปลงนิดหน่อยให้พอดี Card
+                                        decoration: BoxDecoration(
+                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                          color: Colors.grey.shade100,
+                                        ),
+                                        child: ClipRRect(
+                                          borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                                          child: IgnorePointer(
+                                            child: ReceiptPreviewOverlay(
+                                              imageFile: _lastPickedImage!,
+                                              items: items,
+                                              originalWidth: _imgWidth,
+                                              originalHeight: _imgHeight,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ),
 
-                                if (mounted) setState(() {});
-                              }
-                            },
-                          );
-                        },
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemCount: items.length,
-                      ),
-                    ),
-                    // Bottom actions
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                      child: Row(
-                        children: [
-                          // Expanded(
-                          //   child: OutlinedButton.icon(
-                          //     onPressed: () {
-                          //       // TODO: ไปหน้าแก้ไขทั้งหมด
-                          //     },
-                          //     icon: const Icon(Icons.edit_outlined),
-                          //     label: Text('Edit all', style: GoogleFonts.prompt()),
-                          //     style: OutlinedButton.styleFrom(
-                          //       padding: const EdgeInsets.symmetric(vertical: 14),
-                          //       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          //     ),
-                          //   ),
-                          // ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: ElevatedButton.icon(
-                              onPressed: _isSavingBatch
-                                ? null
-                                : () {
-                                  _saveAllItems(items, ctx);
-                                },
-                              icon: _isSavingBatch
-                                ? const SizedBox(
-                                  width: 20,
-                                  height: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                    color: Colors.white,
+                                  // Header Info (Scan receipt & Items count)
+                                  Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(10),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF10B981).withOpacity(0.12),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF10B981), size: 24),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text('สแกนใบเสร็จสำเร็จ',
+                                                  style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.black87)),
+                                              Text('พบ ${items.length} รายการ',
+                                                  style: GoogleFonts.prompt(
+                                                      fontSize: 13, color: cs.onSurfaceVariant)),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: cs.primary.withOpacity(0.1),
+                                            borderRadius: BorderRadius.circular(20),
+                                          ),
+                                          child: Text('${items.length}',
+                                              style: GoogleFonts.prompt(
+                                                  fontWeight: FontWeight.w700, fontSize: 16, color: cs.primary)),
+                                        ),
+                                      ],
+                                    ),
                                   ),
-                                )
-                                : const Icon(Icons.check_rounded),
-                              label: Text(
-                                  _isSavingBatch ? 'Saving...' : 'Save All',
-                                ),
-                              style: ElevatedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  
+                                  Divider(height: 1, color: cs.outlineVariant.withOpacity(0.5)),
+
+                                  // Date Picker
+                                  InkWell(
+                                    onTap: () async {
+                                      final DateTime? picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _selectedReceiptDate,
+                                        firstDate: DateTime(2000),
+                                        lastDate: DateTime(2100),
+                                        builder: (context, child) {
+                                          return Theme(
+                                            data: Theme.of(context).copyWith(
+                                              colorScheme: ColorScheme.light(
+                                                primary: cs.primary,
+                                                onPrimary: Colors.white,
+                                              ),
+                                            ),
+                                            child: child!,
+                                          );
+                                        },
+                                      );
+                                      if (picked != null && picked != _selectedReceiptDate) {
+                                        setModelState(() {
+                                          _selectedReceiptDate = picked;
+                                        });
+                                      }
+                                    },
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.calendar_today_rounded, color: cs.onSurfaceVariant, size: 20),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              'วันที่ใบเสร็จ',
+                                              style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.w500, color: Colors.black87),
+                                            ),
+                                          ),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                            decoration: BoxDecoration(
+                                              color: Colors.grey.shade100,
+                                              borderRadius: BorderRadius.circular(8),
+                                              border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Text(
+                                                  dateFmt.format(_selectedReceiptDate), 
+                                                  style: GoogleFonts.prompt(
+                                                    fontSize: 14, 
+                                                    color: Colors.black87, 
+                                                    fontWeight: FontWeight.w600
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 6),
+                                                Icon(Icons.edit_rounded, color: cs.primary, size: 14),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
+                          const SizedBox(height: 16),
                         ],
+                      ),
+                    ),
+                    // --- สิ้นสุดส่วนที่ 1 ---
+
+                    // --- ส่วนที่ 2: รายการสินค้า (List Items) ---
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+                      sliver: SliverList(
+                        delegate: SliverChildBuilderDelegate(
+                          (context, i) {
+                            final it = items[i];
+                            return Padding(
+                              padding: const EdgeInsets.only(bottom: 10), 
+                              child: Dismissible(
+                                key: Key(it.id),
+                                direction: DismissDirection.endToStart,
+                                background: Container(
+                                  alignment: Alignment.centerRight,
+                                  padding: const EdgeInsets.only(right: 20),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.shade400,
+                                    borderRadius: BorderRadius.circular(16)
+                                  ),
+                                  child: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: Colors.white,
+                                    size: 28,
+                                  ),
+                                ),
+                                onDismissed: (direction) {
+                                  setModelState(() {
+                                    items.removeAt(i);
+                                  });
+                                  if (mounted) setState(() {});
+
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('ลบรายการ "${it.title}" ออกแล้ว', style: GoogleFonts.prompt()),
+                                      behavior: SnackBarBehavior.floating,
+                                      duration: const Duration(seconds: 2),
+                                    )
+                                  );
+                                },
+                                child: _ReceiptTile(
+                                  icon: it.icon,
+                                  iconBg: it.iconBg,
+                                  title: it.title,
+                                  qtyText: 'x${it.qty}',
+                                  dateText: dateFmt.format(it.date), // รายการจะยังแสดงวันที่จาก OCR อยู่ (ถ้าต้องการเปลี่ยนให้โชว์เป็น _selectedReceiptDate ก็แก้ตรงนี้ได้ครับ)
+                                  amountText: currency.format(it.amount.abs()),
+                                  isExpense: it.amount < 0,
+                                  onTap: () async {
+                                    final updated = await showModalBottomSheet<dynamic>(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      useSafeArea: true,
+                                      builder: (_) => EditReceiptItemSheet(
+                                        item: ReceiptItem.fromScanResult(it),
+                                        isScanMode: true,
+                                      ),
+                                    );
+                                            
+                                    if (updated != null && updated is ReceiptItem) {
+                                      setModelState(() {
+                                        items[i] = ReceiptScanResult(
+                                          id: it.id,
+                                          title: updated.item_name, 
+                                          icon: it.icon, 
+                                          iconBg: it.iconBg, 
+                                          date: updated.receiptDate, 
+                                          qty: updated.quantity, 
+                                          categoryId: updated.category_id,
+                                          amount: updated.entryType == 'expense' ? -updated.total_price : updated.total_price,
+                                          boundingBox: it.boundingBox,
+                                        );
+                                      });
+                                      if (mounted) setState(() {});
+                                    }
+                                  },
+                                ),
+                              ),
+                            );
+                          },
+                          childCount: items.length,
+                        ),
+                      ),
+                    ),
+
+                    // --- ส่วนที่ 3: ปุ่มด้านล่างสุด ---
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                        child: SizedBox(
+                          width: double.infinity,
+                          height: 50,
+                          child: ElevatedButton.icon(
+                            onPressed: _isSavingBatch ? null : () => _saveAllItems(items, ctx),
+                            icon: _isSavingBatch 
+                              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                              : const Icon(Icons.check_rounded),
+                            label: Text(_isSavingBatch ? 'Saving...' : 'บันทึกทั้งหมด', style: GoogleFonts.prompt()),
+                            style: ElevatedButton.styleFrom(
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -610,6 +825,7 @@ class _ReceiptTile extends StatelessWidget {
 }
 
 class ReceiptScanResult {
+  final String id;
   final String title;
   final IconData icon;
   final Color iconBg;
@@ -617,7 +833,9 @@ class ReceiptScanResult {
   final int qty;
   final num amount; // ติดลบ = รายจ่าย
   final int? categoryId;
+  final BoundingBox? boundingBox;
   ReceiptScanResult({
+    required this.id,
     required this.title,
     required this.icon,
     required this.iconBg,
@@ -625,6 +843,7 @@ class ReceiptScanResult {
     required this.qty,
     required this.amount,
     this.categoryId,
+    this.boundingBox
   });
 }
 

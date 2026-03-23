@@ -6,12 +6,12 @@ class BudgetCategoryItem {
   final String? iconName;
   final String? colorHex;
 
-  double limit;
+  double limitAmount; // เปลี่ยนชื่อจาก limit เป็น limitAmount
 
   BudgetCategoryItem({
     required this.categoryId,
     required this.categoryName,
-    required this.limit,
+    required this.limitAmount,
     this.iconName,
     this.colorHex
   });
@@ -22,14 +22,14 @@ class BudgetCategoryItem {
       categoryName: json['category_name'] as String, 
       iconName: json['icon_name'] as String?,
       colorHex: json['color_hex'] as String?,
-      limit: (json['limit'] as num).toDouble(),
+      limitAmount: (json['limit_amount'] as num).toDouble(), // อ่านจาก key ใหม่
     );
   }
 
   Map<String, dynamic> toUpdateJson() {
     return {
       'category_id': categoryId,
-      'limit': limit
+      'limit_amount': limitAmount // ส่งกลับด้วย key ใหม่
     };
   }
 } 
@@ -66,6 +66,9 @@ class BudgetResponse {
 
   Map<String, dynamic> toUpdateJson() {
     return {
+      // 🌟 เพิ่ม month และ year เข้ามาใน JSON Body เพื่อส่งให้ FastAPI
+      'month': month,
+      'year': year,
       'warning_enabled': warningEnabled,
       'warning_percentage': warningPercentage,
       'overspending_enabled': overspendingEnabled,
