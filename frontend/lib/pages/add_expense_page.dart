@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:frontend/models/receipt_item.dart';
 import 'package:frontend/services/receipt_service.dart';
 import 'package:frontend/utils/transaction_event.dart';
-import 'package:frontend/widgets/add_expense_page_widgets/add_expense_body.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
@@ -41,30 +40,48 @@ class _AddExpensePageState extends State<AddExpensePage> {
 
   final NumberFormat _formatter = NumberFormat.decimalPattern('th_TH');
 
-  // ===== Category data =====
-  final List<_Category> _categories = const [
-    _Category('Others', Icons.category_rounded, Color(0xFF64748B)),
-    _Category('Food', Icons.restaurant_rounded, Color(0xFFF59E0B)),
-    _Category('Shopping', Icons.shopping_bag_rounded, Color(0xFF8B5CF6)),
-    _Category('Bills', Icons.receipt_long_rounded, Color(0xFF10B981)),
-    _Category('Transportation', Icons.directions_bus_filled_rounded, Color(0xFF3B82F6)),
-  ];
+  List<Map<String, dynamic>> _categories = [];
+  bool _isLoadingCategories = true;
 
-  int? _suggestCategoryIndex() {
-    final name = _nameController.text.toLowerCase();
-    final notes = _notesController.text.toLowerCase();
-    final text = '$name $notes';
-
-    bool has(List<String> keys) => keys.any(text.contains);
-
-    if (has(['food', 'eat', 'dinner', 'lunch', 'rice', 'kfc', 'mk', 'กิน', 'ข้าว', 'อาหาร', 'หนม'])) return 1; // Food
-    if (has(['shop', 'mall', 'lazada', 'shopee', 'clothes', 'ซื้อ', 'ของ', 'เสื้อ'])) return 2; // Shopping
-    if (has(['bill', 'electric', 'water', 'internet', 'netflix', 'spotify', 'ค่าไฟ', 'ค่าน้ำ', 'เน็ต'])) return 3; // Bills
-    if (has(['bus', 'train', 'bts', 'mrt', 'grab', 'taxi', 'gas', 'oil', 'รถ', 'เดินทาง', 'น้ำมัน'])) return 4; // Transportation
-
-    return null; // Default or Others
+  Color _parseColor(String? hex) {
+    if (hex == null || hex.isEmpty) return const Color(0xFF64748B);
+    
+    // ลบเครื่องหมาย # ออกก่อน (ถ้ามี)
+    hex = hex.replaceAll('#', '');
+    
+    // เติม 'FF' ข้างหน้าเพื่อให้สีทึบแสง 100% (Alpha)
+    if (hex.length == 6) hex = 'FF$hex';
+    
+    return Color(int.tryParse(hex, radix: 16) ?? 0xFF64748B);
   }
 
+  // ปรับให้รับ categoryName มาช่วยเช็คด้วย เผื่อ icon_name ใน DB เป็น Null
+IconData _parseIcon(String? iconName, String categoryName) {
+    final icon = iconName?.trim().toLowerCase() ?? '';
+    final cat = categoryName.trim().toLowerCase();
+
+    // 1. แมตช์กับข้อมูลในคอลัมน์ icon_name จาก Database ตรงๆ เลย
+    switch (icon) {
+      case 'restaurant': return Icons.restaurant_rounded;
+      case 'shopping_bag': return Icons.shopping_bag_rounded;
+      case 'receipt_long': return Icons.receipt_long_rounded;
+      case 'directions_bus': return Icons.directions_bus_filled_rounded;
+      case 'payments': return Icons.account_balance_wallet_rounded;
+      case 'work': return Icons.monetization_on_rounded;
+      case 'card_giftcard': return Icons.redeem_rounded;
+      case 'sell': return Icons.storefront_rounded;
+      case 'category': return Icons.category_rounded;
+    }
+
+    // 2. ระบบสำรอง: ถ้าสร้างหมวดหมู่ใหม่แล้วไม่ได้ใส่ icon_name มา ให้เดาจากชื่อหมวดหมู่
+    if (cat.contains('food') || cat.contains('อาหาร')) return Icons.restaurant_rounded;
+    if (cat.contains('shop') || cat.contains('ช้อป')) return Icons.shopping_bag_rounded;
+    if (cat.contains('bill') || cat.contains('บิล') || cat.contains('ค่า')) return Icons.receipt_long_rounded;
+    if (cat.contains('transport') || cat.contains('รถ') || cat.contains('เดินทาง')) return Icons.directions_bus_filled_rounded;
+
+    // 3. ค่า Default สุดท้าย ถ้านึกไม่ออกจริงๆ ให้ใช้รูปเรขาคณิต
+    return Icons.category_rounded;
+  }
   TextStyle _labelStyle() => GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.w800);
 
   InputDecoration _inputDecoration({
@@ -104,18 +121,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
   @override
   void initState() {
     super.initState();
-    _loadSettings();
+    _fetchCategories();
+    // _loadSettings();
     _dateController.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
-
-    void refreshAuto() {
-      if (_categoryMode != CategoryMode.auto) return;
-
-      setState(() => _autoCategoryIndex = _suggestCategoryIndex());
-    }
-
-    _nameController.addListener(refreshAuto);
-    _notesController.addListener(refreshAuto);
-    _autoCategoryIndex = _suggestCategoryIndex();
   }
 
   @override
@@ -127,16 +135,20 @@ class _AddExpensePageState extends State<AddExpensePage> {
     super.dispose();
   }
 
-  Future<void> _loadSettings() async {
-    final prefs = await SharedPreferences.getInstance();
-    final isManual = prefs.getBool(_prefKeyMode) ?? false;
-    if (mounted) {
-      setState(() {
-        _categoryMode = isManual ? CategoryMode.manual : CategoryMode.auto;
-        if (_categoryMode == CategoryMode.auto) {
-          _autoCategoryIndex = _suggestCategoryIndex();
-        }
-      });
+  Future<void> _fetchCategories() async {
+    try {
+      setState(() => _isLoadingCategories = true);
+      final categories = await ReceiptService().getCategoryMaster();
+      if (mounted) {
+        setState(() {
+          // กรองเอาเฉพาะฝั่งรายจ่าย
+          _categories = categories.where((c) => c['entry_type'] == 'expense').toList();
+          _isLoadingCategories = false;
+        });
+      }
+    } catch (e) {
+      debugPrint("Error: $e");
+      if (mounted) setState(() => _isLoadingCategories = false);
     }
   }
 
@@ -145,61 +157,87 @@ class _AddExpensePageState extends State<AddExpensePage> {
     await prefs.setBool(_prefKeyMode, mode == CategoryMode.manual);
   }
 
+  void _showAddCategoryDialog() {
+    final nameController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('เพิ่มหมวดหมู่ใหม่'),
+        content: TextField(
+          controller: nameController,
+          decoration: const InputDecoration(hintText: "ชื่อหมวดหมู่"),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('ยกเลิก')),
+          ElevatedButton(
+            onPressed: () async {
+              if (nameController.text.trim().isNotEmpty) {
+                bool success = await ReceiptService().addNewCategory(nameController.text.trim(), 'expense');
+                if (success && mounted) {
+                  Navigator.pop(context);
+                  _fetchCategories(); // โหลดข้อมูลใหม่เพื่อรีเฟรชหน้าจอ
+                }
+              }
+            },
+            child: const Text('บันทึก'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _onSave() async {
     if (_formKey.currentState!.validate()) {
 
       setState(() => _isLoading = true);
 
       try {
-      final amountRaw = _amountController.text.replaceAll(',', '');
-      final amount = double.parse(amountRaw);
+        final amountRaw = _amountController.text.replaceAll(',', '');
+        final amount = double.parse(amountRaw);
 
-      final date = DateFormat('dd/MM/yyyy').parse(_dateController.text);
+        final date = DateFormat('dd/MM/yyyy').parse(_dateController.text);
 
-      String categoryName;
-      if (_categoryMode == CategoryMode.auto && _autoCategoryIndex != null) {
-        categoryName = _categories[_autoCategoryIndex!].name;
-      } else {
-        categoryName = _categories[_selectedCategoryIndex].name;
-      }
+        String categoryName;
+        if (_categoryMode == CategoryMode.auto) {
+          categoryName = "Auto";
+        } else {
+          if (_categories.isNotEmpty && _selectedCategoryIndex < _categories.length) {
+            categoryName = _categories[_selectedCategoryIndex]['category_name'];
+          }
+          else {
+            categoryName = "Others";
+          }
+        }
 
-      await ReceiptService().addExpense(
-        amount: amount,
-        itemName: _nameController.text,
-        storeName: null,
-        date: date,
-        categoryName: categoryName,
-        note: _notesController.text.isEmpty ? null : _notesController.text
-      );
-
-      if (mounted) {
-        TransactionEvent.triggerRefresh();
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("บันทึกสำเร็จ!"), backgroundColor: Colors.green,)
+        await ReceiptService().addExpense(
+          amount: amount,
+          itemName: _nameController.text,
+          storeName: null,
+          date: date,
+          categoryName: categoryName,
+          note: _notesController.text.isEmpty ? null : _notesController.text
         );
 
-        TransactionEvent.triggerRefresh();
-        
-        Navigator.pop(context);
-      }
+        final transaction = ExpenseTransaction(
+          amount: amount,
+          source: _nameController.text,
+          date: DateFormat('dd/MM/yyyy').parse(_dateController.text),
+          note: _notesController.text,
+          categoryName: categoryName
+        );
 
-      final transaction = ExpenseTransaction(
-        amount: amount,
-        source: _nameController.text,
-        date: DateFormat('dd/MM/yyyy').parse(_dateController.text),
-        note: _notesController.text,
-        categoryName: categoryName
-      );
+        debugPrint("บันทึกข้อมูล: $transaction");
 
-      debugPrint("บันทึกข้อมูล: $transaction");
+        if (mounted) {
+          TransactionEvent.triggerRefresh();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('บันทึกยอด ${transaction.amount} บาท เรียบร้อย!'),
-          backgroundColor: Colors.green,
-        )
-      );
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("บันทึกสำเร็จ!"), backgroundColor: Colors.green,)
+          );
+
+          Navigator.pop(context);
+        }
       
       } catch (e) {
         if (mounted) {
@@ -214,7 +252,6 @@ class _AddExpensePageState extends State<AddExpensePage> {
           }
         }
       }
-
     }
   }
 
@@ -296,14 +333,14 @@ class _AddExpensePageState extends State<AddExpensePage> {
                         },
                       ),
                       SizedBox(height: 12,),
-                      Text("Order Name", style: _labelStyle(),),
+                      Text("Title", style: _labelStyle(),),
                       SizedBox(height: 12,),
                       TextFormField(
                         controller: _nameController,
                         style: GoogleFonts.prompt(),
                         decoration: _inputDecoration(
-                          hint: "Name",
-                          prefixIcon: const Icon(Icons.person_outline_rounded)
+                          hint: "Expense name",
+                          prefixIcon: const Icon(Icons.account_balance_wallet_rounded)
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -374,9 +411,6 @@ class _AddExpensePageState extends State<AddExpensePage> {
                                 final newMode = s.first;
                                 setState(() {
                                   _categoryMode = newMode;
-                                  if (_categoryMode == CategoryMode.auto) {
-                                    _autoCategoryIndex = _suggestCategoryIndex();
-                                  }
                                 });
                                 _saveSettings(newMode);
                               },
@@ -409,9 +443,9 @@ class _AddExpensePageState extends State<AddExpensePage> {
                               const SizedBox(width: 10,),
                               Expanded(
                                 child: Text(
-                                  _autoCategoryIndex == null
+                                  _autoCategoryIndex == null || _categories.isEmpty
                                   ? "Auto: Not sure yet (switch to Manual)"
-                                  : "Auto: ${_categories[_autoCategoryIndex!].name}",
+                                  : "Auto: ${_categories[_autoCategoryIndex!]['category_name']}",
                                   style: GoogleFonts.prompt(fontWeight: FontWeight.w600),
                                 )
                               )
@@ -419,28 +453,42 @@ class _AddExpensePageState extends State<AddExpensePage> {
                           ),
                         )
                       ] else ...[
-                        GridView.builder(
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: _categories.length,
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: crossAxisCount,
-                            mainAxisSpacing: 10,
-                            crossAxisSpacing: 10,
-                            childAspectRatio: crossAxisCount <= 2 ? 2.1 : 0.95,
+                        if (_isLoadingCategories) ...[
+                          const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(32),
+                              child: CircularProgressIndicator(color: kPrimary),
+                            ),
                           ),
-                          itemBuilder: (_, i) {
-                            final c = _categories[i];
-                            final selected = i == _selectedCategoryIndex;
-                            return _CategoryCard(
-                              name: c.name,
-                              icon: c.icon,
-                              color: c.color,
-                              selected: selected,
-                              onTap: () => setState(() => _selectedCategoryIndex = i),
-                            );
-                          },
-                        ),
+                        ] else
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: _categories.length + 1,
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: crossAxisCount,
+                              mainAxisSpacing: 10,
+                              crossAxisSpacing: 10,
+                              childAspectRatio: crossAxisCount <= 2 ? 2.1 : 0.95,
+                            ),
+                            itemBuilder: (_, i) {
+                              if (i == _categories.length) {
+                                return _AddCategoryCard(onTap: _showAddCategoryDialog);
+                              }
+
+                              final c = _categories[i];
+                              final selected = i == _selectedCategoryIndex;
+                              final catName = c['category_name'] ?? 'Unknown';
+
+                              return _CategoryCard(
+                                name: c['category_name'] ?? 'Unknown', 
+                                icon: _parseIcon(c['icon_name'], catName), 
+                                color: _parseColor(c['color_hex']), 
+                                selected: selected, 
+                                onTap: () => setState(() => _selectedCategoryIndex = i)
+                              );
+                            },
+                          ),
                       ],
                       SizedBox(height: 24,),
                     ],
@@ -459,7 +507,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
             child: FloatingActionButton.extended(
               backgroundColor: const Color(0xFF2563EB), // 🔵 สีน้ำเงินหลัก
               foregroundColor: Colors.white,             // ตัวอักษรเป็นสีขาว
-              onPressed: _onSave,
+              onPressed: _isLoading ? null : _onSave,
               label: Text(
                 'Save',
                 style: GoogleFonts.prompt(
@@ -578,6 +626,46 @@ class _CategoryCard extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                   color: selected ? color : cs.onSurface,
                 ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddCategoryCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AddCategoryCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Material(
+      color: cs.surface,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.blue.withOpacity(0.6)),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 36, height: 36,
+                decoration: BoxDecoration(color: Colors.blue.withOpacity(0.12), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.add_rounded, color: Colors.blue),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                "เพิ่มหมวดหมู่",
+                style: GoogleFonts.prompt(fontSize: 12, fontWeight: FontWeight.w700, color: Colors.blue),
               ),
             ],
           ),

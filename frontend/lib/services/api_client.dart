@@ -24,7 +24,7 @@ class ApiEnv {
       return dotenv.env['API_BASE_URL_IOS'] ?? 'http://localhost:8000';
     }
 
-    return dotenv.env['API_BASE_URL_ANDROID'] ?? 'http://192.168.1.9:8000';
+    return dotenv.env['API_BASE_URL_ANDROID'] ?? 'http://192.168.1.12:8000';
   }
 
   static const timeout = Duration(seconds: 15);

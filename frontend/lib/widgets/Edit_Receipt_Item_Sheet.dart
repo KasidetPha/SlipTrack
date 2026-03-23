@@ -41,6 +41,7 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
   late TextEditingController _qtyCtrl;
   late TextEditingController _priceCtrl;
   late TextEditingController _unitPriceCtrl;
+  late TextEditingController _notePriceCtrl;
   late DateTime _date;
   late int _categoryId;
 
@@ -48,15 +49,7 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
   bool get _isIncome => widget.item.entryType == 'income';
 
   bool _saving = false;
-  final _dateFmt = DateFormat('dd/MM/yyyy');
-
-  // static const _categoryOptions = <Map<String, dynamic>>[
-  //   {'id': 1, 'name': 'Others'},
-  //   {'id': 2, 'name': 'Food'},
-  //   {'id': 3, 'name': 'Shopping'},
-  //   {'id': 4, 'name': 'Bills'},
-  //   {'id': 5, 'name': 'Transportation'},
-  // ];
+  final _dateFmt = DateFormat('dd/MM/yyyy'); // นำกลับมาใช้สำหรับแสดงผลวันที่
 
   static const _expenseCategoryOptions = <Map<String, dynamic>>[
     {'id': 1, 'name': 'Others'},
@@ -67,10 +60,10 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
   ];
 
   static const _incomeCategoryOptions = <Map<String, dynamic>>[
-    {'id': 1, 'name': 'Salary'},
-    {'id': 2, 'name': 'Wages'},
-    {'id': 3, 'name': 'Gift'},
-    {'id': 4, 'name': 'Sales'},
+    {'id': 8, 'name': 'Salary'},
+    {'id': 9, 'name': 'Wages'},
+    {'id': 10, 'name': 'Gift'},
+    {'id': 11, 'name': 'Sales'},
   ];
 
   List<Map<String, dynamic>> get _currentCategoryOptions =>
@@ -106,7 +99,6 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         alignment: Alignment.center,
         decoration: BoxDecoration(
-          // border: Border,
           color: selected
             ? _AppColors.primary.withOpacity(0.12)
             : Colors.white,
@@ -170,6 +162,7 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
     _nameCtrl = TextEditingController(text: widget.item.item_name);
     _qtyCtrl = TextEditingController(text: widget.item.quantity.toString());
     _priceCtrl = TextEditingController(text: widget.item.total_price.toStringAsFixed(2));
+    _notePriceCtrl = TextEditingController(text: widget.item.note ?? '');
 
     final q = widget.item.quantity;
     final unit = q > 0
@@ -195,9 +188,11 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
     _qtyCtrl.dispose();
     _priceCtrl.dispose();
     _unitPriceCtrl.dispose();
+    _notePriceCtrl.dispose();
     super.dispose();
   }
 
+  // นำฟังก์ชันเลือกวันที่กลับมา สำหรับหน้าแก้ไขปกติ
   Future _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -259,7 +254,7 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
       quantity: qty,
       total_price: totalPrice,
       receiptDate: _date,
-      category_id: _categoryId
+      category_id: _categoryId,
     );
 
     if (widget.isScanMode) {
@@ -275,7 +270,8 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
             incomeSource: updatedItem.item_name, 
             amount: updatedItem.total_price, 
             incomeDate: updatedItem.receiptDate, 
-            categoryId: updatedItem.category_id
+            categoryId: updatedItem.category_id,
+            note: updatedItem.note
           );
         } else {
           await ReceiptService().updateReceiptItem(
@@ -284,7 +280,8 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
             quantity: updatedItem.quantity,
             totalPrice: updatedItem.total_price,
             receiptDate: updatedItem.receiptDate,
-            categoryId: updatedItem.category_id
+            categoryId: updatedItem.category_id,
+            note: _notePriceCtrl.text.trim()
           );
         }
       
@@ -305,7 +302,6 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
 
   InputDecoration _input({String? hint, String? prefix, Color? fillColor = Colors.white}) {
     return InputDecoration(
-      // labelText: label,
       hintText: hint,
       prefixText: prefix,
       filled: true,
@@ -346,7 +342,6 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
 
   @override
   Widget build(BuildContext context) {
-    // final cate = _categoryOptions.firstWhere((c) => c['id'] == _categoryId);
     return SafeArea(
       top: false,
       child: Container(
@@ -422,7 +417,6 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                                           onPressed: () {
                                             final n = int.tryParse(_qtyCtrl.text) ?? 1;
                                             if (n > 1) _qtyCtrl.text = (n-1).toString();
-                                            // setState(() {});
                                             _onQtyChange();
                                           },
                                           icon: const Icon(Icons.remove_rounded)
@@ -451,7 +445,6 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                                           onPressed: () {
                                             final n = int.tryParse(_qtyCtrl.text) ?? 1;
                                             _qtyCtrl.text = (n+1).toString();
-                                            // setState(() {});
                                             _onQtyChange();
                                           },
                                           icon: Icon(Icons.add_rounded)
@@ -477,7 +470,6 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                                     decoration: BoxDecoration(
                                       color: Colors.white,
                                       borderRadius: BorderRadius.circular(12),
-                                      // border: Border.all(color: _AppColors.border)
                                     ),
                                     clipBehavior: Clip.antiAlias,
                                     child: Container(
@@ -569,7 +561,6 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                                       readOnly: true,
                                       controller: _priceCtrl,
                                       decoration: _input(hint: 'เช่น 100.00', prefix: '฿', fillColor: Colors.grey[200]),
-                                      // onChanged: (_) => _recalcFromTotal(),
                                       validator: null
                                     ),
                                   ],
@@ -590,7 +581,6 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                                       controller: _unitPriceCtrl,
                                       decoration: _input(hint: 'เช่น 12.50', prefix: '฿', fillColor: Colors.grey[200]),
                                       validator: null,
-                                      // onChanged: (_) => _recalcFromUnit(),
                                     ),
                                   ],
                                 )
@@ -629,33 +619,65 @@ class _EditReceiptItemSheetState extends State<EditReceiptItemSheet> {
                 ),
 
                 const SizedBox(height: 12,),
+
+                _section(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("Note (Optonal)", style: GoogleFonts.prompt(fontSize: 12, color: _AppColors.text),),
+                      const SizedBox(height: 6,),
+                      TextFormField(
+                        controller: _notePriceCtrl,
+                        maxLines: 3,
+                        textInputAction: TextInputAction.done,
+                        decoration: _input(
+                          hint: "Add a note..."
+                        ).copyWith(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12)
+                        ),
+                      )
+                    ],
+                  )
+                ),
                   
+                const SizedBox(height: 12,),
+
                 _section(
                   child: Row(
                     children: [
-                      Expanded(
-                        child: InkWell(
-                          onTap: _pickDate,
-                          borderRadius: BorderRadius.circular(12),
-                          child: Container(
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(12),
-                              color: _AppColors.surface,
-                              border: Border.all(color: _AppColors.border)
+                      // 🌟 เช็คเงื่อนไข: แสดงปุ่มเลือกวันที่เฉพาะตอนที่ไม่ได้สแกน (isScanMode == false)
+                      if (!widget.isScanMode) ...[
+                        Expanded(
+                          child: InkWell(
+                            onTap: _pickDate,
+                            borderRadius: BorderRadius.circular(12),
+                            child: Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(12),
+                                color: _AppColors.surface,
+                                border: Border.all(color: _AppColors.border)
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.calendar_today_rounded, size: 20, color: _AppColors.primary,),
+                                  const SizedBox(width: 8,),
+                                  Expanded(
+                                    child: Text(_dateFmt.format(_date),
+                                      style: GoogleFonts.prompt(fontWeight: FontWeight.w600, fontSize: 13),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  )
+                                ],
+                              ),
                             ),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.calendar_today_rounded, size: 20, color: _AppColors.primary,),
-                                const SizedBox(width: 8,),
-                                Text(_dateFmt.format(_date),
-                                  style: GoogleFonts.prompt(fontWeight: FontWeight.w600),)
-                              ],
-                            ),
-                          ),
-                        )
-                      ),
-                      const SizedBox(width: 12,),
+                          )
+                        ),
+                        const SizedBox(width: 12,),
+                      ],
+                      
+                      // 🌟 หมวดหมู่จะขยายเต็มความกว้างอัตโนมัติเมื่อวันที่ถูกซ่อน
                       Expanded(
                         child: DropdownButtonFormField<int>(
                           value: _categoryId,

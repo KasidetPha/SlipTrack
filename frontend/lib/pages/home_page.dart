@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/pages/add_expense_page.dart';
+import 'package:frontend/pages/add_income_page.dart';
 import 'package:frontend/pages/budget_page/budget_page.dart';
 // import 'package:frontend/pages/budget_page/budget_page.dart';
 import 'package:frontend/pages/category_see_all_page.dart';
+import 'package:frontend/pages/dashboard_page/dashboard_page.dart';
 import 'package:frontend/pages/profile_page/budget_setting.dart';
 import 'package:frontend/pages/scan_page.dart';
 import 'package:frontend/utils/transaction_event.dart';
@@ -58,7 +61,11 @@ class _HomePageState extends State<HomePage> {
           email: 'Kasidet@gmail.com', 
           balance: 30000,
           onScanReceipt: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanPage())),
-          onBudget: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BudgetPage(month: now.month, year: now.year,))),
+          onAddIncome: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddIncomePage())),
+          onAddExpense: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddExpensePage())),
+          
+          onBudget: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BudgetPage())),
+          onDashboard: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DashboardPage())),
           language: _lang,
           onLanguageChanged: (v) {
             setState(() => _lang = v); // ตอนนี้แค่ UI เปลี่ยนปุ่ม
@@ -80,7 +87,6 @@ class _HomePageState extends State<HomePage> {
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
-                    // height: 280,
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [
@@ -105,9 +111,6 @@ class _HomePageState extends State<HomePage> {
                       children: [
                         HomeHeader(),
                         SizedBox(height: 24),
-                        // MonthYearDropdown(
-                        //   onMonthYearChanged: onMonthYearChanged,
-                        // ),
                         FilterMonthYear(
                           key: ValueKey('${selectedMonth}_${selectedYear}'),
                           initialMonth: selectedMonth,
@@ -140,7 +143,6 @@ class _HomePageState extends State<HomePage> {
                           selectedMonth: selectedMonth, 
                           selectedYear: selectedYear,
                           title: "Current Balance ${getMonthName(selectedMonth)} $selectedYear",
-                          // isCategoryMode: false,
                         ),
                       ],
                     ),

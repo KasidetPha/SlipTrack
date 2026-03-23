@@ -5,8 +5,10 @@ import 'package:frontend/models/category_total.dart';
 import 'package:frontend/models/first_Username_icon.dart';
 import 'package:frontend/models/monthly_kind.dart';
 import 'package:frontend/models/monthly_total.dart';
+import 'package:frontend/models/notification_model.dart';
 import 'package:frontend/models/receipt_item.dart';
 import 'package:frontend/models/stats_summary.dart';
+import 'package:frontend/models/user_profile.dart';
 import 'package:frontend/services/api_client.dart';
 import 'package:intl/intl.dart';
 
@@ -25,6 +27,7 @@ class ReceiptService {
   factory ReceiptService() => _i;
 
   final Dio _dio = ApiClient().dio;
+  final ApiClient _apiClient = ApiClient();
 
   // ดึงรายการสินค้าตามเดือน/รายปี
   Future<List<ReceiptItem>> fetchReceiptItems({
@@ -267,6 +270,7 @@ class ReceiptService {
     required double totalPrice,
     required DateTime receiptDate,
     required int categoryId,
+    required String? note,
     CancelToken? cancelToken,
   }) async {
 
@@ -281,6 +285,7 @@ class ReceiptService {
       'total_price': price2,
       'receipt_date': dateStr,
       'category_id': categoryId,
+      'note': note,
     };
 
     try {
@@ -416,10 +421,7 @@ class ReceiptService {
     try {
       final res = await _dio.put(
         '/budgets',
-        queryParameters: {
-          'month': budget.month,
-          'year': budget.year,
-        },
+        // 🌟 เอา queryParameters ออก เพราะส่งไปใน data แล้ว 🌟
         data: budget.toUpdateJson(),
         cancelToken: cancelToken
       );
@@ -581,6 +583,7 @@ class ReceiptService {
     required double amount,
     required DateTime incomeDate,
     required int categoryId,
+    required String? note,
     CancelToken? cancelToken,
   }) async {
     final dateStr = DateFormat('yyyy-MM-dd').format(incomeDate);
@@ -591,7 +594,8 @@ class ReceiptService {
       'income_source': incomeSource,
       'amount': amount2,
       'category_id': categoryId,
-      'income_date': dateStr
+      'income_date': dateStr,
+      'note': note,
     };
 
     try {
@@ -622,5 +626,160 @@ class ReceiptService {
     }
   }
 
+  // ดึงหมวดหมู่ทั้งหมดสำหรับทำ Dropdown แล้วก็ Grid ในหน้า create
+  Future<List<Map<String, dynamic>>> getCategoryMaster({
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final res = await _dio.get(
+        '/categories/master',
+        cancelToken: cancelToken,
+      );
+
+      if (res.statusCode == 200) {
+        final data = res.data;
+        if (data is! List) {
+          throw ApiException('Unexpected response shape', statusCode: res.statusCode);
+        }
+        // แปลงเป็น List<Map<String, dynamic>> ให้ฝั่ง UI ใช้งานง่ายๆ
+        return List<Map<String, dynamic>>.from(data);
+      }
+
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        throw ApiException('Unauthorized', statusCode: res.statusCode);
+      }
+      throw ApiException('Fetch categories failed', statusCode: res.statusCode);
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final dynamic body = e.response?.data;
+      final msg = (body is Map && (body['message'] != null || body['detail'] != null))
+        ? (body['message'] ?? body['detail']).toString()
+        : e.message ?? 'Network error';
+
+      throw ApiException(msg, statusCode: code);
+    }
+  }
+
+  // สร้างหมวดหมู่ใหม่
+  Future<bool> addNewCategory(String categoryName, String entryType, {
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final body = {
+        'category_name': categoryName,
+        'entry_type': entryType,
+      };
+
+      final res = await _dio.post(
+        '/categories',
+        data: body,
+        cancelToken: cancelToken,
+      );
+
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        return true;
+      }
+      
+      return false;
+    } on DioException catch (e) {
+      final dynamic body = e.response?.data;
+      final msg = (body is Map && body['detail'] != null)
+        ? body['detail'].toString()
+        : e.message ?? 'Network error';
+        
+      // พ่น Log ออกมาดูเผื่อ API คืน Error กลับมา
+      print('Add Category Error: $msg'); 
+      return false;
+    }
+  }
+
+  Future<UserProfile> fetchUserProfile({
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final res = await _dio.get(
+        '/users/profile',
+        cancelToken: cancelToken,
+      );
+
+      if (res.statusCode == 200) {
+        final data = res.data;
+        if (data is! Map) {
+          throw ApiException('Unexpected response shape', statusCode: res.statusCode);
+        }
+        return UserProfile.fromJson(Map<String, dynamic>.from(data));
+      }
+
+      if (res.statusCode == 401 || res.statusCode == 403) {
+        throw ApiException('Unauthorized', statusCode: res.statusCode);
+      }
+      throw ApiException('Fetch profile failed', statusCode: res.statusCode);
+      
+    } on DioException catch (e) {
+      final code = e.response?.statusCode;
+      final dynamic body = e.response?.data;
+      final msg = (body is Map && (body['message'] != null || body['detail'] != null))
+          ? (body['message'] ?? body['detail']).toString()
+          : e.message ?? 'Network error';
+
+      print("Error fetching profile: $msg");
+      // ส่งค่า Default กลับไปเพื่อไม่ให้แอปแครช
+      return UserProfile(displayName: "Offline", email: "Please check connection", balance: 0.0);
+    } catch (e) {
+      print("Unexpected error fetching profile: $e");
+      return UserProfile(displayName: "Error", email: "Internal error", balance: 0.0);
+    }
+  }
+
+  Future<void> updateFcmToken(String token) async {
+    try {
+      final res = await _dio.post(
+        '/users/fcm-token',
+        data: {'token': token},
+      );
+
+      if (res.statusCode == 200) {
+        print("อัปเดต FCM Token ไปที่ Backend สำเร็จ!");
+      }
+    } catch (e) {
+      print("ส่ง FCM Token ไป Backend ไม่สำเร็จ: $e");
+    }
+  }
+
+  Future<List<NotificationItem>> fetchNotifications({CancelToken? cancelToken}) async {
+    try {
+      final res = await _dio.get('/notifications', cancelToken: cancelToken);
+      if (res.statusCode == 200) {
+        final List data = res.data;
+        return data.map((e) => NotificationItem.fromJson(e)).toList();
+      }
+      return [];
+    } catch (e) {
+      print("Error fetching notifications: $e");
+      return [];
+    }
+  }
+
+  // 2. อัปเดตสถานะว่า "อ่านแล้ว"
+  Future<void> markNotificationAsRead(int id) async {
+    try {
+      await _dio.put('/notifications/$id/read');
+    } catch (e) {
+      print("Error marking notification as read: $e");
+    }
+  }
+
+  Future<int> fetchUnreadNotificationCount({CancelToken? cancelToken}) async {
+    try {
+      final res = await _dio.get("/notifications/unread-count", cancelToken: cancelToken);
+      if (res.statusCode == 200) {
+        return int.tryParse(res.data['unread_count'].toString()) ?? 0;
+      }
+      return 0;
+    } catch (e) {
+      print("Error fetching unread count: $e");
+      return 0;
+    }
+  }
 
 }

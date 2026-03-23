@@ -49,3 +49,4 @@ app.*.map.json
 .svn/
 migrate_working_dir/
 frontend/.env
+backend_fastAPI/firebase-key.json
