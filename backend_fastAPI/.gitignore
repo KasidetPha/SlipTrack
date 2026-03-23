@@ -1,0 +1,10 @@
+# Firebase Secret Key
+firebase-key.json
+
+# Python environment
+.venv/
+__pycache__/
+.env
+
+# อื่นๆ
+.DS_Store

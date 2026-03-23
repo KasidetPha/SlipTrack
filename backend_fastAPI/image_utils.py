@@ -1,76 +1,56 @@
-import cv2
-import numpy as np
-import tempfile
+import io
+from PIL import Image, ImageOps
 
-def deskew_image(image):
-    """สำหรับแก้ภาพเอียง (Deskewing)"""
-    img_copy = image.copy()
+import io
+from PIL import Image
+
+def optimize_image_for_gemini(image_bytes: bytes, max_size: int = 1500, quality: int = 85) -> bytes:
+    """
+    ย่อขนาดและบีบอัดรูปภาพให้เหมาะกับการส่งให้ Gemini อ่าน (ลดเวลา Processing)
+    """
+    # โหลดรูปจาก Bytes
+    img = Image.open(io.BytesIO(image_bytes))
     
-    # แปลงเป็นขาวดำแบบกลับสี (ข้อความสีขาว พื้นหลังสีดำ) เพื่อหาพิกัด
-    _, thresh = cv2.threshold(img_copy, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-    
-    # หาพิกัด (x, y) ของจุดที่เป็นข้อความทั้งหมด
-    coords = np.column_stack(np.where(thresh > 0))
-    
-    # หาค่ากรอบสี่เหลี่ยมที่ครอบข้อความทั้งหมด (จะได้องศาความเอียง)
-    angle = cv2.minAreaRect(coords)[-1]
-    
-    # ปรับองศาให้อยู่ในระนาบ
-    if angle < -45:
-        angle = -(90 + angle)
-    else:
-        angle = -angle
+    # แปลงเป็นโหมด RGB (เผื่อรูปต้นฉบับมาเป็น PNG แบบโปร่งใส หรือ RGBA)
+    if img.mode != 'RGB':
+        img = img.convert('RGB')
         
-    # ถ้าเอียงน้อยกว่า 0.5 องศา ถือว่าตรง
-    if abs(angle) < 0.5:
-        return image
+    # คำนวณสัดส่วนเพื่อย่อขนาด ถ้าด้านใดด้านหนึ่งยาวเกิน max_size
+    width, height = img.size
+    if width > max_size or height > max_size:
+        if width > height:
+            new_width = max_size
+            new_height = int((max_size / width) * height)
+        else:
+            new_height = max_size
+            new_width = int((max_size / height) * width)
+            
+        # ใช้ LANCZOS เพื่อรักษาความคมชัดของตัวหนังสือตอนย่อรูป
+        img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)
     
-    # คำนวณจุดกึ่งกลางและหมุนภาพ
-    (h, w) = image.shape[:2]
-    center = (w // 2, h // 2)
-    M = cv2.getRotationMatrix2D(center, angle, 1.0)
+    # บีบอัดและเซฟลง BytesIO
+    output_buffer = io.BytesIO()
+    img.save(output_buffer, format="JPEG", quality=quality, optimize=True)
     
-    # หมุนภาพแล้วเติมขอบด้วยสีขาว
-    rotated = cv2.warpAffine(image, M, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.Border_REPLICATE)
-    return rotated
+    return output_buffer.getvalue(), img.width, img.height
 
-def preprocess_receipt_image(image_bytes: bytes) -> str:
-    """รับไฟล์รูปดิบมาทำความสะอาดแล้วคืนค่าเป็น Path ของไฟล์ชั่วคราว"""
+def preprocess_receipt_image(image_bytes: bytes, max_size=1536):
+    """
+    ปรับ Flow ใหม่: เลิกซูม เลิกทำขาวดำ
+    แค่จัดการภาพไม่ให้ใหญ่เกินไปและถูกทิศทางเพื่อให้ AI อ่านไวขึ้น
+    """
+    image = Image.open(io.BytesIO(image_bytes))
     
-    # โหลดภาพจาก Memory (Bytes) โดยตรงไม่ต้องเซฟลงดิสก์ก่อน
-    nparr = np.frombuffer(image_bytes, np.uint8)
-    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    # 1. แก้ปัญหาภาพกลับหัว/หมุน จาก EXIF ของกล้องมือถือ
+    image = ImageOps.exif_transpose(image)
     
-    if img is None:
-        raise ValueError("ไม่สามารถอ่านไฟล์รูปได้")
+    # 2. ถ้ารูปใหญ่เกินไป ให้ย่อรูปลงมา (Aspect Ratio คงเดิม)
+    if max(image.size) > max_size:
+        image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+        
+    # 3. แปลงกลับเป็น bytes เพื่อส่งคืน
+    output_io = io.BytesIO()
+    image.save(output_io, format="JPEG", quality=85)
+    processed_bytes = output_io.getvalue()
     
-    # แปลงเป็นสีเทา
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    
-    deskewed = deskew_image(gray)
-    
-    # ดึงความชัด ช่วยให้หมึกจางๆ บนสลิป โผล่ขึ้นมา
-    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-    enhanced = clahe.apply(deskewed)
-    
-    # เบลอเล็กน้อย เพื่อลบเม็ดสีรบกวน
-    blurred = cv2.GaussianBlur(enhanced, (5, 5), 0)
-    
-    # แยกข้อความกับพื้นหลัง (Adaptive Thresholding)
-    # block_size =31, c=15 เป็นค่าที่เหมาะกับสลิปที่มีเงา
-    binary = cv2.adaptiveThreshold(
-        blurred, 255,
-        cv2.ADAPTIVE_THRESH_GAUSSIAN_C,
-        cv2.THRESH_BINARY,
-        31, 15
-    )
-    
-    # บันทึกไฟล์ชั่วคราว .png เพราะว่าเก็บละเอียด text ดีกว่า .jpg
-    tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-    cv2.imwrite(tmp.name, binary)
-    
-    cv2.imwrite("debug_output.png", binary)
-    
-    return tmp.name
-    
-    
+    return processed_bytes, image.width, image.height
