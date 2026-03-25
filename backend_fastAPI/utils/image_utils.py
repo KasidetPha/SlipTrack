@@ -1,9 +1,6 @@
 import io
 from PIL import Image, ImageOps
 
-import io
-from PIL import Image
-
 def optimize_image_for_gemini(image_bytes: bytes, max_size: int = 1500, quality: int = 85) -> bytes:
     """
     ย่อขนาดและบีบอัดรูปภาพให้เหมาะกับการส่งให้ Gemini อ่าน (ลดเวลา Processing)
