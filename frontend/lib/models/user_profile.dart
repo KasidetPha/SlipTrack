@@ -11,9 +11,9 @@ class UserProfile {
 
   factory UserProfile.fromJson(Map<String, dynamic> json) {
     return UserProfile(
-      displayName: json['display_name'] ?? 'Unknown User',
+      displayName: json['display_name'] ?? '',
       email: json['email'] ?? '',
-      balance: (json['balance'] ?? 0).toDouble(),
+      balance: (json['balance'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

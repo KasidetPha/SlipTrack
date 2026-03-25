@@ -698,7 +698,7 @@ class ReceiptService {
   }) async {
     try {
       final res = await _dio.get(
-        '/users/profile',
+        '/api/users/profile',
         cancelToken: cancelToken,
       );
 

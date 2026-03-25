@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/models/user_profile.dart';
 import 'package:frontend/pages/add_expense_page.dart';
 import 'package:frontend/pages/add_income_page.dart';
 import 'package:frontend/pages/budget_page/budget_page.dart';
@@ -7,6 +8,7 @@ import 'package:frontend/pages/category_see_all_page.dart';
 import 'package:frontend/pages/dashboard_page/dashboard_page.dart';
 import 'package:frontend/pages/profile_page/budget_setting.dart';
 import 'package:frontend/pages/scan_page.dart';
+import 'package:frontend/services/receipt_service.dart';
 import 'package:frontend/utils/transaction_event.dart';
 import 'package:frontend/widgets/drawer/sliptrack_drawer.dart';
 import 'package:frontend/widgets/filter_month_year.dart';
@@ -35,6 +37,29 @@ class _HomePageState extends State<HomePage> {
 
   AppLanguage _lang = AppLanguage.th;
 
+  UserProfile? _userProfile;
+  bool _isLoadingProfile = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    setState(() => _isLoadingProfile = true);
+    try {
+      final profile = await ReceiptService().fetchUserProfile();
+      setState(() {
+        _userProfile = profile;
+        _isLoadingProfile = false;
+      });
+    } catch (e) {
+      debugPrint("Error loading profile: $e");
+      setState(() => _isLoadingProfile = false);
+    }
+  }
+
   void onMonthYearChanged(int month, int year) {
     setState(() {
       selectedMonth = month;
@@ -57,9 +82,9 @@ class _HomePageState extends State<HomePage> {
     return SafeArea(
       child: Scaffold(
         drawer: SliptrackDrawer(
-          displayName: 'kasidet', 
-          email: 'Kasidet@gmail.com', 
-          balance: 30000,
+          displayName: _userProfile?.displayName ?? 'Loading....', 
+          email: _userProfile?.email ?? '...',
+          balance: _userProfile?.balance ?? 0,
           onScanReceipt: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanPage())),
           onAddIncome: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddIncomePage())),
           onAddExpense: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddExpensePage())),

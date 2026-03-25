@@ -205,32 +205,44 @@ class _ProfileHeader extends StatelessWidget {
   final String email;
   final String balanceText;
 
+  String _getInitials(String name) {
+    if (name.trim().isEmpty) return '?';
+
+    final nameParts = name.trim().split(RegExp(r'\s+'));
+    if (nameParts.length > 1) {
+      return '${nameParts[0][0]}${nameParts[1][0]}'.toUpperCase();
+    } else {
+      return name.substring(0, name.length >= 2 ? 2 : 1).toUpperCase();
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final String initials = _getInitials(displayName);
 
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
         boxShadow: [
           BoxShadow(
-            color: cs.onSurface.withOpacity(0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
+            color: cs.onSurface.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
           )
         ],
       ),
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
       child: Row(
         children: [
           CircleAvatar(
             radius: 28,
             backgroundColor: cs.primary.withOpacity(0.12),
             child: Text(
-              'KS',
-              style: GoogleFonts.prompt(fontWeight: FontWeight.w700, fontSize: 16, color: cs.primary),
+              initials,
+              style: GoogleFonts.prompt(fontWeight: FontWeight.w700, fontSize: 16, color: cs.primary, letterSpacing: 1.2),
             ),
           ),
           const SizedBox(width: 12),
