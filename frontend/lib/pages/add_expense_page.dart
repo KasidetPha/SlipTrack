@@ -172,8 +172,15 @@ IconData _parseIcon(String? iconName, String categoryName) {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('ยกเลิก')),
           ElevatedButton(
             onPressed: () async {
+              String hexColor = '#3498DB';
               if (nameController.text.trim().isNotEmpty) {
-                bool success = await ReceiptService().addNewCategory(nameController.text.trim(), 'expense');
+                bool success = await ReceiptService().addNewCategory(
+                  categoryName: nameController.text.trim(), 
+                  entryType: 'expense', 
+                  iconName: 'category', 
+                  colorHex: hexColor
+                );
+                
                 if (success && mounted) {
                   Navigator.pop(context);
                   _fetchCategories(); // โหลดข้อมูลใหม่เพื่อรีเฟรชหน้าจอ

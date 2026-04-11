@@ -661,13 +661,19 @@ class ReceiptService {
   }
 
   // สร้างหมวดหมู่ใหม่
-  Future<bool> addNewCategory(String categoryName, String entryType, {
+  Future<bool> addNewCategory({
+    required String categoryName, 
+    required String entryType,
+    required String iconName,
+    required String colorHex,
     CancelToken? cancelToken,
   }) async {
     try {
       final body = {
         'category_name': categoryName,
         'entry_type': entryType,
+        'icon_name': iconName,
+        'color_hex': colorHex
       };
 
       final res = await _dio.post(

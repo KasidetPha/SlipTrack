@@ -6,6 +6,7 @@ import 'package:frontend/pages/budget_page/budget_page.dart';
 // import 'package:frontend/pages/budget_page/budget_page.dart';
 import 'package:frontend/pages/category_see_all_page.dart';
 import 'package:frontend/pages/dashboard_page/dashboard_page.dart';
+import 'package:frontend/pages/manage_category_page.dart';
 import 'package:frontend/pages/profile_page/budget_setting.dart';
 import 'package:frontend/pages/scan_page.dart';
 import 'package:frontend/services/receipt_service.dart';
@@ -90,6 +91,7 @@ class _HomePageState extends State<HomePage> {
           onAddExpense: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AddExpensePage())),
           
           onBudget: () => Navigator.push(context, MaterialPageRoute(builder: (_) => BudgetPage())),
+          onCategory: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ManageCategoryPage())),
           onDashboard: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DashboardPage())),
           language: _lang,
           onLanguageChanged: (v) {

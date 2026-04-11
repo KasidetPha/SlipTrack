@@ -115,8 +115,14 @@ class _AddIncomePageState extends State<AddIncomePage> {
           ElevatedButton(
             onPressed: () async {
               if (nameController.text.trim().isNotEmpty) {
+                String hexColor = '#3498DB';
                 // ระบุประเภทเป็น 'income'
-                bool success = await ReceiptService().addNewCategory(nameController.text.trim(), 'income');
+                bool success = await ReceiptService().addNewCategory(
+                  categoryName: nameController.text.trim(),
+                  entryType: 'income',                      // เปลี่ยนเป็น income
+                  iconName: 'category', 
+                  colorHex: hexColor                        
+                );
                 if (success && mounted) {
                   Navigator.pop(context);
                   _fetchCategories(); 

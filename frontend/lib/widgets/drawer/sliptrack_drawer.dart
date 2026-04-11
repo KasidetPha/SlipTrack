@@ -13,6 +13,7 @@ class SliptrackDrawer extends StatelessWidget {
     this.onScanReceipt,
     this.onAddExpense,
     this.onAddIncome,
+    this.onCategory,
     this.onBudget,
     this.onDashboard,
     
@@ -27,6 +28,8 @@ class SliptrackDrawer extends StatelessWidget {
   final VoidCallback? onScanReceipt;
   final VoidCallback? onAddExpense;
   final VoidCallback? onAddIncome;
+  
+  final VoidCallback? onCategory;
   final VoidCallback? onDashboard;
 
   final VoidCallback? onBudget;
@@ -66,7 +69,7 @@ class SliptrackDrawer extends StatelessWidget {
 
                     const SizedBox(height: 8),
                     const _SectionLabel('Manage'),
-                    _Tile(icon: Icons.category_rounded, label: 'Category', onTap: () {}),
+                    _Tile(icon: Icons.category_rounded, label: 'Category', onTap: onCategory),
                     _Tile(icon: Icons.account_balance_wallet_rounded, label: 'Budget', onTap: onBudget),
                     _Tile(icon: Icons.analytics_rounded, label: 'Reports & Analytics', onTap: onDashboard),
 

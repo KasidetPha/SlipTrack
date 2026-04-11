@@ -1,4 +1,3 @@
-// lib/models/category_master.dart
 class CategoryMaster {
   final int categoryId;
   final String categoryName;
