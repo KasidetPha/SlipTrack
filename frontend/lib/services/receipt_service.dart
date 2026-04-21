@@ -660,45 +660,6 @@ class ReceiptService {
     }
   }
 
-  // สร้างหมวดหมู่ใหม่
-  Future<bool> addNewCategory({
-    required String categoryName, 
-    required String entryType,
-    required String iconName,
-    required String colorHex,
-    CancelToken? cancelToken,
-  }) async {
-    try {
-      final body = {
-        'category_name': categoryName,
-        'entry_type': entryType,
-        'icon_name': iconName,
-        'color_hex': colorHex
-      };
-
-      final res = await _dio.post(
-        '/categories',
-        data: body,
-        cancelToken: cancelToken,
-      );
-
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        return true;
-      }
-      
-      return false;
-    } on DioException catch (e) {
-      final dynamic body = e.response?.data;
-      final msg = (body is Map && body['detail'] != null)
-        ? body['detail'].toString()
-        : e.message ?? 'Network error';
-        
-      // พ่น Log ออกมาดูเผื่อ API คืน Error กลับมา
-      print('Add Category Error: $msg'); 
-      return false;
-    }
-  }
-
   Future<UserProfile> fetchUserProfile({
     CancelToken? cancelToken,
   }) async {

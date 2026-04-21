@@ -2,7 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:frontend/models/receipt_item.dart';
+import 'package:frontend/services/category_service.dart';
 import 'package:frontend/services/receipt_service.dart';
+import 'package:frontend/services/token_storage.dart';
 import 'package:frontend/utils/transaction_event.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
@@ -157,7 +159,10 @@ IconData _parseIcon(String? iconName, String categoryName) {
     await prefs.setBool(_prefKeyMode, mode == CategoryMode.manual);
   }
 
-  void _showAddCategoryDialog() {
+  void _showAddCategoryDialog() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token') ?? '';
+
     final nameController = TextEditingController();
     showDialog(
       context: context,
@@ -174,7 +179,8 @@ IconData _parseIcon(String? iconName, String categoryName) {
             onPressed: () async {
               String hexColor = '#3498DB';
               if (nameController.text.trim().isNotEmpty) {
-                bool success = await ReceiptService().addNewCategory(
+                bool success = await CategoryService().addNewCategory(
+                  token: token,
                   categoryName: nameController.text.trim(), 
                   entryType: 'expense', 
                   iconName: 'category', 
