@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:frontend/models/receipt_item.dart';
+import 'package:frontend/services/category_service.dart';
 import 'package:frontend/services/receipt_service.dart';
 import 'package:frontend/utils/transaction_event.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 enum CategoryMode { auto, manual }
 
@@ -99,7 +101,9 @@ class _AddIncomePageState extends State<AddIncomePage> {
   }
 
   // ฟังก์ชันเพิ่มหมวดหมู่รายรับ
-  void _showAddCategoryDialog() {
+  void _showAddCategoryDialog() async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token') ?? '';
     final nameController = TextEditingController();
     showDialog(
       context: context,
@@ -117,7 +121,8 @@ class _AddIncomePageState extends State<AddIncomePage> {
               if (nameController.text.trim().isNotEmpty) {
                 String hexColor = '#3498DB';
                 // ระบุประเภทเป็น 'income'
-                bool success = await ReceiptService().addNewCategory(
+                bool success = await CategoryService().addNewCategory(
+                  token: token,
                   categoryName: nameController.text.trim(),
                   entryType: 'income',                      // เปลี่ยนเป็น income
                   iconName: 'category', 
