@@ -67,7 +67,7 @@ class CreateCategoryBody(BaseModel):
 class SuggestCategoryBody(BaseModel):
     """ชื่อไอเทมที่ต้องการให้ AI ช่วยเดาหมวดหมู่"""
     item_name: str
-
+    
 
 # ==========================================
 # รายรับ - รายจ่าย (Transactions)
