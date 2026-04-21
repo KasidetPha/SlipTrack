@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Body, Path
 from typing import List
 import aiomysql
+import pymysql
 
 from core.database import get_db_conn
 from core.security import require_auth
@@ -133,17 +134,18 @@ async def get_category_master(
             c.icon_name         AS icon_name,
             c.color_hex         AS color_hex
         FROM categories c
+        WHERE c.user_id IS NULL OR c.user_id = %s
         ORDER BY entry_type DESC, category_id
     """
     async with db_pool.acquire() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
-            await cur.execute(sql)
+            await cur.execute(sql, (auth.id,))
             rows = await cur.fetchall()
             await conn.commit()
             
     return rows
 
-@router.post("")
+@router.post("/")
 async def create_category(
     body: CreateCategoryBody,
     auth: TokenPayload = Depends(require_auth),
@@ -181,7 +183,101 @@ async def create_category(
             await conn.rollback()
             print(f"Error creating category: {e}")
             raise HTTPException(status_code=500, detail="Failed to create category")
-
+        
+@router.put("/{category_id}")
+async def update_category(
+    category_id: int,
+    body: CreateCategoryBody,
+    auth: TokenPayload = Depends(require_auth),
+    db_pool: aiomysql.Pool = Depends(get_db_conn)
+):
+    """แก้ไขหมวดหมู่ (เปลี่ยนชื่อ, สี, ไอคอน)"""
+    async with db_pool.acquire() as conn:
+        try:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await conn.begin()
+                
+                cat_type = "EXPENSE" if body.entry_type.lower() == "expense" else "INCOME"
+                
+                sql = """
+                    UPDATE categories
+                    SET category_name = %s, category_type = %s, icon_name = %s, color_hex = %s
+                    WHERE category_id = %s AND user_id = %s
+                """
+                print(sql, (
+                    body.category_name,
+                    cat_type,
+                    body.icon_name,
+                    body.color_hex,
+                    category_id,
+                    auth.id
+                ))
+                
+                await cur.execute(sql, (
+                    body.category_name,
+                    cat_type,
+                    body.icon_name,
+                    body.color_hex,
+                    category_id,
+                    auth.id
+                ))
+                
+                
+                if cur.rowcount == 0:
+                    await conn.rollback()
+                    raise HTTPException(status_code=404, detail="ไม่พบหมวดหมู่นี้ หรือคุณไม่มีสิทธิ์แก้ไข")
+                
+                await conn.commit()
+                return {"message": "category updated successfully"}
+        except pymysql.err.IntegrityError as e:
+            await conn.rollback()
+            if e.args[0] == 1062:
+                raise HTTPException(status_code=400, detail="ชื่อหมวดหมู่นี้มีอยู่แล้ว")
+            raise HTTPException(status_code=500, detail="Database error")
+        except Exception as e:
+            await conn.rollback()
+            print(f"Error updating category: {e}")
+            raise HTTPException(status_code=500, detail="Failed to update category")
+        
+@router.delete("/{category_id}")
+async def delete_category(
+    category_id: int,
+    auth: TokenPayload = Depends(require_auth),
+    db_pool: aiomysql.Pool = Depends(get_db_conn)
+):
+    """ลบหมวดหมู่ที่ตัวเองสร้าง"""
+    async with db_pool.acquire() as conn:
+        try:
+            async with conn.cursor(aiomysql.DictCursor) as cur:
+                await conn.begin()
+                
+                sql = "DELETE FROM categories WHERE category_id = %s AND user_id = %s"
+                await cur.execute(sql, (category_id, auth.id))
+                
+                if cur.rowcount == 0:
+                    await conn.rollback()
+                    raise HTTPException(status_code=404, detail='ไม่พบหมวดหมู่นี้หรือ คุณไม่มีสิทธิ์ลบ')
+                
+                await conn.commit()
+                return {"message": "Category deleted successfully"}
+            
+        except pymysql.err.IntegrityError as e:
+            await conn.rollback()
+            if e.args[0] == 1451:
+                raise HTTPException(
+                    status_code=400,
+                    detail="ไม่สามารถลบหมวดหมู่นี้ได้ เนื่องจากมีรายการบันทึกบัญชีที่ใช้งานหมวดหมู่นี้อยู่"
+                )
+            raise HTTPException(status_code=500, detail="Database integrity error")
+            
+        except HTTPException:
+            raise
+        except Exception as e:
+            await conn.rollback()
+            print(f"Error deleting category: {e}")
+            raise HTTPException(status_code=500, detail="Failed to delete category")
+        
+    
 @router.post("/suggest")
 async def suggest_category(
     body: SuggestCategoryBody,
