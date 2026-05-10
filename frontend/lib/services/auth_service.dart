@@ -1,6 +1,10 @@
 import 'dart:convert';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:frontend/pages/login_page.dart';
+import 'package:frontend/providers/profile_provider.dart';
 import 'package:frontend/services/api_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -60,12 +64,68 @@ class AuthService {
     }
   }
 
-  Future<void> logout() async {
+  Future<String?> forgotPassword({required String email}) async {
+    final res = await _dio.post(
+      '/forgot-password',
+      data: {
+        'email': email,
+      },
+      options: Options(
+        validateStatus: (code) => code != null && code < 500,
+      ),
+    );
+
+    if (res.statusCode == 200) {
+      final data = res.data;
+      if (data is Map) {
+        return data['reset_token']?.toString();
+      }
+      return null;
+    }
+
+    final msg = _extractErrorMessage(res.data) ?? 'Forgot password failed';
+    throw Exception(msg);
+  }
+
+  Future<void> resetPassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    final res = await _dio.post(
+      '/reset-password',
+      data: {
+        'token': token,
+        'new_password': newPassword,
+      },
+      options: Options(
+        validateStatus: (code) => code != null && code < 500,
+      ),
+    );
+
+    if (res.statusCode == 200) {
+      return;
+    }
+
+    final msg = _extractErrorMessage(res.data) ?? 'Reset password failed';
+    throw Exception(msg);
+  }
+
+  Future<void> logout(WidgetRef ref, BuildContext context) async {
     final prefs = await SharedPreferences.getInstance();
+
     await prefs.remove('token');
-    // await prefs.remove('refresh_token');
+    await prefs.remove('gemini_api_key');
 
     ApiClient().clearToken();
+
+    ref.invalidate(userProfileProvider);
+    ref.invalidate(userProfileDetailProvider);
+
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
   }
 
   Future<String?> getToken() async {
@@ -78,7 +138,7 @@ class AuthService {
     final token = prefs.getString('token');
 
     if (token == null || token.isEmpty) {
-      ApiClient().clearToken;
+      ApiClient().clearToken();
       return false;
       
     };

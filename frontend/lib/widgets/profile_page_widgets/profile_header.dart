@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:frontend/providers/profile_provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 
-class ProfileHeader extends StatelessWidget {
+class ProfileHeader extends ConsumerWidget {
   const ProfileHeader({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profileAsync = ref.watch(userProfileProvider);
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(24),
@@ -31,20 +35,60 @@ class ProfileHeader extends StatelessWidget {
           )
         ],
       ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.start,
-        children: [
-          Text("Profile", style: GoogleFonts.prompt(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1)),
-          SizedBox(height: 24,),
-          CircleAvatar(
-            radius: 30,
-            backgroundImage: AssetImage('assets/images/profiles/profile_test.jpg')
-          ),
-          SizedBox(height: 24,),
-          Text("Somsuk", style: GoogleFonts.prompt(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, letterSpacing: 0.5),),
-          Text("Somsuk@example.com", style: GoogleFonts.prompt(color: Colors.white.withOpacity(0.8)),)
+      child: profileAsync.when(
+        loading: () => Center(
+          child: CircularProgressIndicator(color: Colors.white)
+        ),
+        error: (error, stack) {
+          debugPrint("PROFILE HEADER ERROR: $error");
+          debugPrintStack(stackTrace: stack);
 
-        ],
+          return Center(
+            child: Text(
+              "โหลดข้อมูลไม่สำเร็จ",
+              style: GoogleFonts.prompt(color: Colors.white),
+            ),
+          );
+        },
+        data: (profile) => Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: 34,
+              backgroundColor: Colors.white.withOpacity(0.25),
+              backgroundImage: profile.profileImage != null &&
+                      profile.profileImage!.isNotEmpty
+                  ? NetworkImage(profile.profileImage!)
+                  : null,
+              child: profile.profileImage == null || profile.profileImage!.isEmpty
+                  ? const Icon(
+                      Icons.person_rounded,
+                      size: 48,
+                      color: Colors.white,
+                    )
+                  : null,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              profile.displayName,
+              style: GoogleFonts.prompt(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              profile.email,
+              style: GoogleFonts.prompt(
+                color: Colors.white.withOpacity(0.8),
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        )
       )
     );
   }

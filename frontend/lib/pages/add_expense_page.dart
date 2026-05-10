@@ -1,26 +1,28 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:frontend/models/receipt_item.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:frontend/models/category_master.dart';
+import 'package:frontend/providers/profile_provider.dart';
+import 'package:frontend/providers/transaction_provider.dart';
 import 'package:frontend/services/category_service.dart';
 import 'package:frontend/services/receipt_service.dart';
-import 'package:frontend/services/token_storage.dart';
-import 'package:frontend/utils/transaction_event.dart';
+import 'package:frontend/utils/category_icon_mapper.dart';
+import 'package:frontend/widgets/category_form_bottom_sheet.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:async';
 
 enum CategoryMode { auto, manual }
 
-class AddExpensePage extends StatefulWidget {
+class AddExpensePage extends ConsumerStatefulWidget {
   const AddExpensePage({super.key});
 
   @override
-  State<AddExpensePage> createState() => _AddExpensePageState();
+  ConsumerState<AddExpensePage> createState() => _AddExpensePageState();
 }
 
-class _AddExpensePageState extends State<AddExpensePage> {
+class _AddExpensePageState extends ConsumerState<AddExpensePage> {
   static const Color kPrimary = Color(0xFFFB2966);
   static const Color kBorder = Color(0x1A000000);
   static const Color kFill = Colors.white;
@@ -30,6 +32,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
   static const String _prefKeyMode = 'last_category_mode';
 
   bool _isLoading = false;
+  bool _isPredicting = false;
+  bool _aiTokenMissing = false;
 
   CategoryMode _categoryMode = CategoryMode.auto;
   int? _autoCategoryIndex;
@@ -41,6 +45,8 @@ class _AddExpensePageState extends State<AddExpensePage> {
   final TextEditingController _dateController = TextEditingController();
 
   final NumberFormat _formatter = NumberFormat.decimalPattern('th_TH');
+
+  Timer? _debounce;
 
   List<Map<String, dynamic>> _categories = [];
   bool _isLoadingCategories = true;
@@ -58,7 +64,7 @@ class _AddExpensePageState extends State<AddExpensePage> {
   }
 
   // ปรับให้รับ categoryName มาช่วยเช็คด้วย เผื่อ icon_name ใน DB เป็น Null
-IconData _parseIcon(String? iconName, String categoryName) {
+  IconData _parseIcon(String? iconName, String categoryName) {
     final icon = iconName?.trim().toLowerCase() ?? '';
     final cat = categoryName.trim().toLowerCase();
 
@@ -84,6 +90,7 @@ IconData _parseIcon(String? iconName, String categoryName) {
     // 3. ค่า Default สุดท้าย ถ้านึกไม่ออกจริงๆ ให้ใช้รูปเรขาคณิต
     return Icons.category_rounded;
   }
+
   TextStyle _labelStyle() => GoogleFonts.prompt(fontSize: 18, fontWeight: FontWeight.w800);
 
   InputDecoration _inputDecoration({
@@ -123,18 +130,87 @@ IconData _parseIcon(String? iconName, String categoryName) {
   @override
   void initState() {
     super.initState();
+    _loadCategoryMode();
     _fetchCategories();
-    // _loadSettings();
     _dateController.text = DateFormat('dd/MM/yyyy').format(DateTime.now());
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _amountController.dispose();
     _nameController.dispose();
     _notesController.dispose();
     _dateController.dispose();
     super.dispose();
+  }
+
+  Future<void> _autoPredictCategory(String itemName) async {
+    if (itemName.isEmpty) return;
+
+    try {
+      final result = await ReceiptService().predictCategory(itemName);
+
+      if (result != null && mounted) {
+        int index = _categories.indexWhere(
+          (c) => c['category_name'].toString().toLowerCase() == result.toLowerCase(),
+        );
+
+        if (index != -1) {
+          setState(() {
+            _selectedCategoryIndex = index;
+            _autoCategoryIndex = index;
+            _aiTokenMissing = false;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Prediction Error: $e");
+
+      if (mounted) {
+        setState(() {
+          _aiTokenMissing = true;
+          _categoryMode = CategoryMode.manual;
+          _isPredicting = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text("กรุณาเพิ่ม Gemini API Key ในหน้า Profile ก่อนใช้งาน Auto Category"),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isPredicting = false;
+        });
+      }
+    }
+  }
+
+  void _onNameChanged(String value) async {
+    if (_categoryMode != CategoryMode.auto) return;
+    if (_aiTokenMissing) return;
+
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+
+    setState(() {
+      _isPredicting = true;
+    });
+
+    _debounce = Timer(const Duration(seconds: 3), () {
+      final text = value.trim();
+      if (text.isNotEmpty) {
+        _autoPredictCategory(text);
+      } else {
+        setState(() {
+          _autoCategoryIndex = null;
+          _isPredicting = false;
+        });
+      }
+    });
   }
 
   Future<void> _fetchCategories() async {
@@ -143,7 +219,6 @@ IconData _parseIcon(String? iconName, String categoryName) {
       final categories = await ReceiptService().getCategoryMaster();
       if (mounted) {
         setState(() {
-          // กรองเอาเฉพาะฝั่งรายจ่าย
           _categories = categories.where((c) => c['entry_type'] == 'expense').toList();
           _isLoadingCategories = false;
         });
@@ -154,50 +229,119 @@ IconData _parseIcon(String? iconName, String categoryName) {
     }
   }
 
+  Future<void> _loadCategoryMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedManual = prefs.getBool(_prefKeyMode) ?? true;
+
+    final profile = await ref.read(userProfileDetailProvider.future);
+    final hasToken = profile.hasGeminiApiKey;
+
+    if (mounted) {
+      setState(() {
+        if (!hasToken) {
+          _categoryMode = CategoryMode.manual;
+          _aiTokenMissing = true;
+        } else {
+          _categoryMode = savedManual
+              ? CategoryMode.manual
+              : CategoryMode.auto;
+        }
+      });
+    }
+  }
+
   Future<void> _saveSettings(CategoryMode mode) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_prefKeyMode, mode == CategoryMode.manual);
   }
 
-  void _showAddCategoryDialog() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token') ?? '';
+  // void _showAddCategoryDialog() async {
+  //   final prefs = await SharedPreferences.getInstance();
+  //   final token = prefs.getString('token') ?? '';
 
-    final nameController = TextEditingController();
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('เพิ่มหมวดหมู่ใหม่'),
-        content: TextField(
-          controller: nameController,
-          decoration: const InputDecoration(hintText: "ชื่อหมวดหมู่"),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('ยกเลิก')),
-          ElevatedButton(
-            onPressed: () async {
-              String hexColor = '#3498DB';
-              if (nameController.text.trim().isNotEmpty) {
-                bool success = await CategoryService().addNewCategory(
-                  token: token,
-                  categoryName: nameController.text.trim(), 
-                  entryType: 'expense', 
-                  iconName: 'category', 
-                  colorHex: hexColor
-                );
+  //   final nameController = TextEditingController();
+  //   showDialog(
+  //     context: context,
+  //     builder: (context) => AlertDialog(
+  //       title: const Text('เพิ่มหมวดหมู่ใหม่'),
+  //       content: TextField(
+  //         controller: nameController,
+  //         decoration: const InputDecoration(hintText: "ชื่อหมวดหมู่"),
+  //         autofocus: true,
+  //       ),
+  //       actions: [
+  //         TextButton(onPressed: () => Navigator.pop(context), child: const Text('ยกเลิก')),
+  //         ElevatedButton(
+  //           onPressed: () async {
+  //             String hexColor = '#3498DB';
+  //             if (nameController.text.trim().isNotEmpty) {
+  //               bool success = await CategoryService().addNewCategory(
+  //                 token: token,
+  //                 categoryName: nameController.text.trim(), 
+  //                 entryType: 'expense', 
+  //                 iconName: 'category', 
+  //                 colorHex: hexColor
+  //               );
                 
-                if (success && mounted) {
-                  Navigator.pop(context);
-                  _fetchCategories(); // โหลดข้อมูลใหม่เพื่อรีเฟรชหน้าจอ
-                }
-              }
-            },
-            child: const Text('บันทึก'),
-          ),
-        ],
-      ),
+  //               if (success && mounted) {
+  //                 Navigator.pop(context);
+  //                 _fetchCategories(); // โหลดข้อมูลใหม่เพื่อรีเฟรชหน้าจอ
+  //               }
+  //             }
+  //           },
+  //           child: const Text('บันทึก'),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
+
+  Future<void> _showAddCategoryBottomSheet() async {
+    final result = await showCategoryFormBottomSheet(
+      context: context,
+      isIncome: false,
     );
+
+    if (result != null) {
+      final String name = result.name;
+      final Color color = result.color;
+      final String iconName = result.iconName;
+
+      final String hexColor =
+          '#${color.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+
+      final success = await CategoryService().addNewCategory(
+        token: token,
+        categoryName: name,
+        entryType: 'expense',
+        iconName: iconName,
+        colorHex: hexColor,
+      );
+
+      if (success && mounted) {
+        await _fetchCategories();
+
+        setState(() {
+          _selectedCategoryIndex = _categories.indexWhere(
+            (c) => c['category_name'] == name,
+          );
+
+          if (_selectedCategoryIndex == -1) {
+            _selectedCategoryIndex = 0;
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('เพิ่มหมวดหมู่สำเร็จ'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    }
   }
 
   void _onSave() async {
@@ -213,7 +357,11 @@ IconData _parseIcon(String? iconName, String categoryName) {
 
         String categoryName;
         if (_categoryMode == CategoryMode.auto) {
-          categoryName = "Auto";
+          if (_autoCategoryIndex != null && _categories.isNotEmpty) {
+            categoryName = _categories[_autoCategoryIndex!]['category_name'];
+          } else {
+            categoryName = "Others";
+          }
         } else {
           if (_categories.isNotEmpty && _selectedCategoryIndex < _categories.length) {
             categoryName = _categories[_selectedCategoryIndex]['category_name'];
@@ -232,6 +380,9 @@ IconData _parseIcon(String? iconName, String categoryName) {
           note: _notesController.text.isEmpty ? null : _notesController.text
         );
 
+        ref.read(transactionControllerProvider).refreshTransactionData();
+        ref.invalidate(userProfileProvider);
+
         final transaction = ExpenseTransaction(
           amount: amount,
           source: _nameController.text,
@@ -243,13 +394,14 @@ IconData _parseIcon(String? iconName, String categoryName) {
         debugPrint("บันทึกข้อมูล: $transaction");
 
         if (mounted) {
-          TransactionEvent.triggerRefresh();
-
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("บันทึกสำเร็จ!"), backgroundColor: Colors.green,)
+            const SnackBar(
+              content: Text("บันทึกสำเร็จ!"),
+              backgroundColor: Colors.green,
+            ),
           );
 
-          Navigator.pop(context);
+          Navigator.pop(context, true);
         }
       
       } catch (e) {
@@ -272,28 +424,42 @@ IconData _parseIcon(String? iconName, String categoryName) {
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final crossAxisCount = _gridCrossAxisCount(width);
+    final profileAsync = ref.watch(userProfileDetailProvider);
+    final hasToken = profileAsync.value?.hasGeminiApiKey ?? false;
+    final tokenMissing = !hasToken;
 
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         appBar: AppBar(
-          elevation: 0,
-          scrolledUnderElevation: 0,
+          elevation: 8,
+          shadowColor: const Color(0xFFFB2966).withOpacity(0.3), // เงาสีชมพูอ่อนๆ
           centerTitle: true,
-          foregroundColor: Colors.white,
-          toolbarHeight: 80,
-          title: const Text('Add Expense'),
+          toolbarHeight: 75, // เพิ่มความสูงให้ดูโปร่งขึ้น
+          backgroundColor: Colors.transparent,
           flexibleSpace: Container(
             decoration: const BoxDecoration(
-              // borderRadius: BorderRadius.vertical(
-              //   bottom: Radius.circular(30)
-              // ),
               gradient: LinearGradient(
-                colors: [Color(0xFFFF5E62), Color(0xFFFB2966)],
+                colors: [Color(0xFFFF5E62), Color(0xFFFB2966)], // ไล่เฉดสีชมพู
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
             ),
+          ),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+          ),
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 8.0),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          title: Text(
+            'Add Expense',
+            style: GoogleFonts.prompt(fontWeight: FontWeight.w600, fontSize: 22, color: Colors.white),
           ),
         ),
         body: SingleChildScrollView(
@@ -351,9 +517,10 @@ IconData _parseIcon(String? iconName, String categoryName) {
                       TextFormField(
                         controller: _nameController,
                         style: GoogleFonts.prompt(),
+                        onChanged: _onNameChanged,
                         decoration: _inputDecoration(
-                          hint: "Expense name",
-                          prefixIcon: const Icon(Icons.account_balance_wallet_rounded)
+                          hint: "What did you buy?",
+                          prefixIcon: const Icon(Icons.shopping_bag_outlined)
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {
@@ -420,13 +587,40 @@ IconData _parseIcon(String? iconName, String categoryName) {
                                 ButtonSegment(value: CategoryMode.manual, label: Text("Manual"), icon: Icon(Icons.touch_app_rounded))
                               ],
                               selected: {_categoryMode},
-                              onSelectionChanged: (s) {
-                                final newMode = s.first;
-                                setState(() {
-                                  _categoryMode = newMode;
-                                });
-                                _saveSettings(newMode);
-                              },
+                              onSelectionChanged: (s) async {
+                              final newMode = s.first;
+
+                            final profile = await ref.read(userProfileDetailProvider.future);
+                            final hasToken = profile.hasGeminiApiKey;
+                              if (newMode == CategoryMode.auto && !hasToken) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("กรุณาเพิ่ม Gemini API Key ก่อนใช้งาน Auto"),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                                return;
+                              }
+
+                              setState(() {
+                                _categoryMode = newMode;
+
+                                if (newMode == CategoryMode.manual) {
+                                  _isPredicting = false;
+                                }
+
+                                if (newMode == CategoryMode.auto) {
+                                  _aiTokenMissing = false;
+                                }
+                              });
+
+                              _saveSettings(newMode);
+
+                              if (newMode == CategoryMode.auto &&
+                                  _nameController.text.trim().isNotEmpty) {
+                                _onNameChanged(_nameController.text);
+                              }
+                            },
                               style: ButtonStyle(
                                 side: WidgetStateProperty.all(
                                   const BorderSide(color: kBorder)
@@ -455,11 +649,33 @@ IconData _parseIcon(String? iconName, String categoryName) {
                               const Icon(Icons.auto_awesome_rounded),
                               const SizedBox(width: 10,),
                               Expanded(
-                                child: Text(
-                                  _autoCategoryIndex == null || _categories.isEmpty
-                                  ? "Auto: Not sure yet (switch to Manual)"
-                                  : "Auto: ${_categories[_autoCategoryIndex!]['category_name']}",
-                                  style: GoogleFonts.prompt(fontWeight: FontWeight.w600),
+                                child: _isPredicting 
+                                ? Row(
+                                  children: [
+                                    const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(strokeWidth: 2.5, color: kPrimary,),
+                                    ),
+                                    const SizedBox(width: 10,),
+                                    Text("กำลังวิเคราะห์หมวดหมู่",
+                                      style: GoogleFonts.prompt(
+                                        fontWeight: FontWeight.w500,
+                                        color: Colors.grey.shade600
+                                      ),
+                                    )
+                                  ],
+                                )
+                                : Text(
+                                  !hasToken
+                                      ? "กรุณาเพิ่ม Gemini API Key ก่อนใช้งาน Auto"
+                                      : _autoCategoryIndex == null || _categories.isEmpty
+                                          ? "Auto: Not sure yet (switch to Manual)"
+                                          : "Auto: ${_categories[_autoCategoryIndex!]['category_name']}",
+                                  style: GoogleFonts.prompt(
+                                    fontWeight: FontWeight.w600,
+                                    color: !hasToken ? Colors.orange.shade800 : Colors.black,
+                                  ),
                                 )
                               )
                             ],
@@ -486,7 +702,7 @@ IconData _parseIcon(String? iconName, String categoryName) {
                             ),
                             itemBuilder: (_, i) {
                               if (i == _categories.length) {
-                                return _AddCategoryCard(onTap: _showAddCategoryDialog);
+                                return _AddCategoryCard(onTap: _showAddCategoryBottomSheet);
                               }
 
                               final c = _categories[i];
@@ -495,7 +711,7 @@ IconData _parseIcon(String? iconName, String categoryName) {
 
                               return _CategoryCard(
                                 name: c['category_name'] ?? 'Unknown', 
-                                icon: _parseIcon(c['icon_name'], catName), 
+                                icon: getIconFromKey(c['icon_name'] ?? 'category'),
                                 color: _parseColor(c['color_hex']), 
                                 selected: selected, 
                                 onTap: () => setState(() => _selectedCategoryIndex = i)

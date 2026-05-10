@@ -4,11 +4,13 @@ import 'package:frontend/pages/login_page.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/services/receipt_service.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'widgets/bottom_nav_page.dart';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -26,7 +28,16 @@ Future<void> main() async {
   );
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  runApp(const MyApp());
+  await Supabase.initialize(
+    url: 'https://dddbgbjukjsqfhalyfxu.supabase.co',
+    anonKey: 'sb_publishable_AN-F1yMnHvxwaiAnwbppXg_jQv0f9rV',
+  );
+
+  runApp(
+    const ProviderScope(
+      child: MyApp()
+    )
+  );
 }
 
 class MyApp extends StatelessWidget {

@@ -4,10 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 
-
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiEnv {
   static String resolveBaseUrl() {
@@ -71,7 +69,6 @@ class ApiClient {
           _tokenInMemory = null;
           dio.options.headers.remove('Authorization');
         }
-        // refresh token
         handler.next(e);
       }
     ));
