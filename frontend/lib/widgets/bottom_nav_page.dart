@@ -1,47 +1,104 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:frontend/pages/add_expense_page.dart';
 import 'package:frontend/pages/add_income_page.dart';
 import 'package:frontend/pages/home_page.dart';
 import 'package:frontend/pages/profile_page.dart';
 import 'package:frontend/pages/scan_page.dart';
+import 'package:frontend/providers/profile_provider.dart';
+import 'package:frontend/providers/transaction_provider.dart';
 import 'package:frontend/widgets/add_entry_sheet.dart';
-// import 'package:lucide_icons/lucide_icons.dart';
+import 'package:frontend/models/monthly_kind.dart';
 
-class BottomNavPage extends StatefulWidget {
+class BottomNavPage extends ConsumerStatefulWidget {
   const BottomNavPage({super.key});
 
   @override
-  State<BottomNavPage> createState() => _BottomNavPageState();
+  ConsumerState<BottomNavPage> createState() => _BottomNavPageState();
 }
 
-class _BottomNavPageState extends State<BottomNavPage> {
+class _BottomNavPageState extends ConsumerState<BottomNavPage> {
   int _currentIndex = 0;
 
   Key _homeKey = UniqueKey();
 
   Future<void> _onTap(int index) async {
     if (index == 1) {
+      final profile = await ref.read(userProfileDetailProvider.future);
+      final hasToken = profile.hasGeminiApiKey;
+
       await showAddEntrySheet(
         context,
+        hasToken: hasToken,
         onIncome: () async {
-          // Navigator.pop(context);
           
           final result = await Navigator.push(
             context, MaterialPageRoute(builder: (_) => const AddIncomePage())
           );
 
           if (result == true) {
+            await Future.delayed(const Duration(milliseconds: 300));
+
+            ref.read(transactionControllerProvider).refreshData();
+
             setState(() {
               _homeKey = UniqueKey();
               _currentIndex = 0;
             });
           }
         },
-        onScan: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const ScanPage()));
+        onScan: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ScanPage()),
+          );
+
+          if (result == true) {
+            await Future.delayed(const Duration(milliseconds: 500));
+
+            ref.read(transactionControllerProvider).refreshData();
+
+            setState(() {
+              _homeKey = UniqueKey();
+              _currentIndex = 0;
+            });
+          }
         },
-        onExpense: () {
-          Navigator.push(context, MaterialPageRoute(builder: (_) => const AddExpensePage()));
+        onExpense: () async {
+          final result = await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AddExpensePage()),
+          );
+
+          if (result == true) {
+            final month = DateTime.now().month;
+            final year = DateTime.now().year;
+
+            await Future.delayed(const Duration(milliseconds: 800));
+
+            await ref.refresh(transactionsProvider((
+              categoryId: null,
+              month: month,
+              year: year,
+              entryType: null,
+            )).future);
+
+            await ref.refresh(categoryTotalsProvider((
+              month: month,
+              year: year,
+            )).future);
+
+            await ref.refresh(summaryProvider(MonthlyKind.income).future);
+            await ref.refresh(summaryProvider(MonthlyKind.expense).future);
+            await ref.refresh(summaryProvider(MonthlyKind.net).future);
+
+            if (!mounted) return;
+
+            setState(() {
+              _homeKey = UniqueKey();
+              _currentIndex = 0;
+            });
+          }
         },
         onQuickAction: (label) {
           

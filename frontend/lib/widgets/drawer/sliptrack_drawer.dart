@@ -10,6 +10,7 @@ class SliptrackDrawer extends StatelessWidget {
     required this.displayName,
     required this.email,
     required this.balance,
+    required this.profileImage,
     this.onScanReceipt,
     this.onAddExpense,
     this.onAddIncome,
@@ -24,6 +25,7 @@ class SliptrackDrawer extends StatelessWidget {
   final String displayName;
   final String email;
   final num balance;
+  final String? profileImage;
 
   final VoidCallback? onScanReceipt;
   final VoidCallback? onAddExpense;
@@ -52,6 +54,7 @@ class SliptrackDrawer extends StatelessWidget {
                 displayName: displayName,
                 email: email,
                 balanceText: currencyTh.format(balance),
+                profileImage: profileImage,
               ),
             ),
             const Divider(height: 1),
@@ -64,8 +67,8 @@ class SliptrackDrawer extends StatelessWidget {
                   children: [
                     const _SectionLabel('Quick Actions'),
                     _Tile(icon: Icons.document_scanner_rounded, label: "Scan Receipt (OCR)", onTap: onScanReceipt),
-                    _Tile(icon: Icons.payments, label: "Add Expense", onTap: onAddExpense),
                     _Tile(icon: Icons.account_balance_wallet_rounded, label: "Add Income", onTap: onAddIncome),
+                    _Tile(icon: Icons.payments, label: "Add Expense", onTap: onAddExpense),
 
                     const SizedBox(height: 8),
                     const _SectionLabel('Manage'),
@@ -73,17 +76,17 @@ class SliptrackDrawer extends StatelessWidget {
                     _Tile(icon: Icons.account_balance_wallet_rounded, label: 'Budget', onTap: onBudget),
                     _Tile(icon: Icons.analytics_rounded, label: 'Reports & Analytics', onTap: onDashboard),
 
-                    const SizedBox(height: 8),
-                    const _SectionLabel('App'),
+                    // const SizedBox(height: 8),
+                    // const _SectionLabel('App'),
 
-                    _Tile(
-                      icon: Icons.language_rounded,
-                      label: 'Language',
-                      trailing: LanguageToggle(
-                        value: language,
-                        onChanged: onLanguageChanged,
-                      ),
-                    ),
+                    // _Tile(
+                    //   icon: Icons.language_rounded,
+                    //   label: 'Language',
+                    //   trailing: LanguageToggle(
+                    //     value: language,
+                    //     onChanged: onLanguageChanged,
+                    //   ),
+                    // ),
                   ],
                 ),
               ),
@@ -202,11 +205,13 @@ class _ProfileHeader extends StatelessWidget {
     required this.displayName,
     required this.email,
     required this.balanceText,
+    required this.profileImage,
   });
 
   final String displayName;
   final String email;
   final String balanceText;
+  final String? profileImage;
 
   String _getInitials(String name) {
     if (name.trim().isEmpty) return '?';
@@ -243,10 +248,19 @@ class _ProfileHeader extends StatelessWidget {
           CircleAvatar(
             radius: 28,
             backgroundColor: cs.primary.withOpacity(0.12),
-            child: Text(
-              initials,
-              style: GoogleFonts.prompt(fontWeight: FontWeight.w700, fontSize: 16, color: cs.primary, letterSpacing: 1.2),
-            ),
+            backgroundImage: (profileImage != null && profileImage!.isNotEmpty)
+                ? NetworkImage(profileImage!)
+                : null,
+            child: (profileImage == null || profileImage!.isEmpty)
+                ? Text(
+                    initials,
+                    style: GoogleFonts.prompt(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 16,
+                      color: cs.primary,
+                    ),
+                  )
+                : null,
           ),
           const SizedBox(width: 12),
           Expanded(

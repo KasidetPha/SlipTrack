@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:frontend/providers/transaction_provider.dart';
 import 'package:frontend/services/api_client.dart';
-import 'package:frontend/services/receipt_service.dart';
 import 'package:frontend/models/receipt_item.dart';
 import 'package:frontend/utils/category_icon_mapper.dart';
 import 'package:frontend/widgets/Edit_Receipt_Item_Sheet.dart';
@@ -9,45 +10,37 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:frontend/pages/login_page.dart';
 
-class ItemsRecent extends StatefulWidget {
+class ItemsRecent extends ConsumerStatefulWidget {
   final int selectedMonth;
   final int selectedYear;
   final int? categoryId;
+  final String? entryType;
 
   const ItemsRecent({super.key,
     required this.selectedMonth,
     required this.selectedYear,
-    this.categoryId
+    this.categoryId,
+    this.entryType,
   });
 
   @override
-  State<ItemsRecent> createState() => _ItemsRecentState();
+  ConsumerState<ItemsRecent> createState() => _ItemsRecentState();
 }
 
-class _ItemsRecentState extends State<ItemsRecent> {
-  late Future<List<ReceiptItem>> _futureItems = _load();
+class _ItemsRecentState extends ConsumerState<ItemsRecent> {
   final currencyTh = NumberFormat.currency(locale: 'th_TH', symbol: '฿');
 
-  @override
-  void initState() {
-    super.initState();
-    // _futureItems = _load();
-  }
+  final Set<int> _hiddenItems = {};
 
   @override
-  void didUpdateWidget(ItemsRecent oldWidget) {
+  void didUpdateWidget(covariant ItemsRecent oldWidget) {
     super.didUpdateWidget(oldWidget);
-    print("didUpdateWidget called - old: ${oldWidget.selectedMonth}/${oldWidget.selectedYear}, new ${widget.selectedMonth}/${widget.selectedYear}");
 
-    final monthChange = oldWidget.selectedMonth != widget.selectedMonth || oldWidget.selectedYear != widget.selectedYear;
-
-    final categoryChanged = oldWidget.categoryId != widget.categoryId;
-
-    if(monthChange || categoryChanged) {
-      print("refreshing data for ${widget.selectedMonth}/${widget.selectedYear}, catId=${widget.categoryId}");
-      setState(() {
-        _futureItems = _load();
-      });
+    if (oldWidget.selectedMonth != widget.selectedMonth ||
+        oldWidget.selectedYear != widget.selectedYear ||
+        oldWidget.categoryId != widget.categoryId ||
+        oldWidget.entryType != widget.entryType) {
+      _hiddenItems.clear();
     }
   }
 
@@ -69,12 +62,9 @@ class _ItemsRecentState extends State<ItemsRecent> {
     if (!mounted) return;
 
     if (result != null) {
-      setState(() {
-        _futureItems = _load();
-      });
-
+      ref.read(transactionControllerProvider).refreshData();
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Saved changes'))
+        const SnackBar(content: Text('Saved changes'), backgroundColor: Colors.green,)
       );
     }
   }
@@ -89,39 +79,6 @@ class _ItemsRecentState extends State<ItemsRecent> {
       MaterialPageRoute(builder: (context) => const LoginPage()),
       (route) => false,
     );
-  }
-
-  Future<List<ReceiptItem>> _load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final token = prefs.getString('token') ?? '';
-
-    if (token.isEmpty) {
-      await logoutAndRedirect();
-      return [];
-    }
-
-    ApiClient().setToken(token);
-
-    try {
-      if (widget.categoryId != null) {
-        return await ReceiptService().fetchReceiptItemsByCategory(
-          categoryId: widget.categoryId!,
-          month: widget.selectedMonth,
-          year: widget.selectedYear,
-        );
-      } else {
-        return await ReceiptService().fetchReceiptItems(
-          month: widget.selectedMonth, 
-          year: widget.selectedYear
-        );
-      }
-    } on ApiException catch (e) {
-      if (e.statusCode == 401 || e.statusCode == 403) {
-        await logoutAndRedirect();
-        return [];
-      }
-      rethrow;
-    }
   }
 
   String _buildDateLabel(DateTime date) {
@@ -140,18 +97,53 @@ class _ItemsRecentState extends State<ItemsRecent> {
     }
   }
 
+  Future<void> _handleDelete(ReceiptItem item) async {
+    final success = await ref
+        .read(transactionControllerProvider)
+        .deleteTransaction(item.item_id, item.entryType);
+
+    if (!mounted) return;
+
+    if (success) {
+      ref.invalidate(transactionsProvider);
+      ref.invalidate(categoryDetailTotalProvider);
+      ref.invalidate(categoryTotalsProvider);
+      ref.invalidate(summaryProvider);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Deleted successfully')),
+      );
+    } else {
+      setState(() {
+        _hiddenItems.remove(item.item_id);
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to delete')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<ReceiptItem>>(
-      future: _futureItems,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        } else if (snapshot.hasError) {
-          return Center(child: Text("Error: ${snapshot.error}"));
-        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+    debugPrint("ITEMS RECENT entryType: ${widget.entryType}");
+    final asyncItems = ref.watch(transactionsProvider((
+      categoryId: widget.categoryId,
+      month: widget.selectedMonth,
+      year: widget.selectedYear,
+      entryType: widget.entryType,
+    )));
+    return asyncItems.when(
+      loading: () => const Center(child: CircularProgressIndicator(),),
+      error: (error, stack) {
+        return Center(child: Text("Error: $error"),);
+      },
+      data: (data) {
+        
+        final visibleData = data.where((item) => !_hiddenItems.contains(item.item_id)).toList();
+        if (visibleData.isEmpty) {
           return const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 24),
+            padding: EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
                 Expanded(
@@ -159,38 +151,42 @@ class _ItemsRecentState extends State<ItemsRecent> {
                     height: 78,
                     child: _EmptyTransactionCard(),
                   )
-                ),
+                )
               ],
             ),
           );
         }
-
-        final items = [...snapshot.data!]
+        final items = [...visibleData]
           ..sort(
             (a, b) => b.receiptDate.compareTo(a.receiptDate),
           );
+          debugPrint(
+            "RECENT ITEMS: ${items.map((e) => '${e.item_name}: ${e.total_price} ${e.receiptDate}').toList()}",
+          );
 
-        return SingleChildScrollView(
-          child: Column(
+          debugPrint("HIDDEN ITEMS: $_hiddenItems");
+          debugPrint(
+            "RAW RECENT DATA: ${data.map((e) => '${e.item_id} ${e.item_name}: ${e.total_price}').toList()}",
+          );
+
+          return Column(
             children: List.generate(items.length, (index) {
               final item = items[index];
-
-              print(item.item_name);
+          
+              // print(item.item_name);
               final DateTime dateOnly = DateUtils.dateOnly(item.receiptDate);
-
-              final String formattedDate = DateFormat('EEE, d MMM').format(dateOnly);
-
+          
               DateTime? previousDate;
-
+          
               if (index > 0) {
                 previousDate = DateUtils.dateOnly(items[index - 1].receiptDate);
               }
-
+          
               final bool isFirstOfDay = previousDate == null || previousDate != dateOnly;
-
+          
               double dailyIncome = 0;
               double dailyExpense = 0;
-
+          
               if (isFirstOfDay) {
                 final sameDayItems = items.where((i) => DateUtils.dateOnly(i.receiptDate) == dateOnly);
                 for (var dayItem in sameDayItems) {
@@ -201,26 +197,26 @@ class _ItemsRecentState extends State<ItemsRecent> {
                   }
                 }
               }
-
+          
               final String dateLabel = _buildDateLabel(dateOnly);
               final iconData = 
                 (item.iconName != null && item.iconName!.isNotEmpty)
                   ? getIconFromKey(item.iconName!)
                   : Icons.category_rounded;
-
+          
               final iconColor =
                 (item.colorHex != null && item.colorHex!.isNotEmpty)
                   ? colorFromHex(item.colorHex!)
                   : Colors.grey;
-
+          
               final bool isIncome = item.entryType == 'income';
-
+          
               // final String transactionLabel = isIncome ? 'Income' : 'Expense';
-
+          
               final Color amountColor = isIncome ? Colors.green.shade600 : Colors.red.shade600;
-
+          
               final String amountPrefix = isIncome ? '+' : '-';
-
+          
               return Padding(
                 padding: const EdgeInsets.fromLTRB(24,0,24,12),
                 child: Column(
@@ -235,204 +231,241 @@ class _ItemsRecentState extends State<ItemsRecent> {
                           fontSize: 13,
                         ),
                       ),
-                      const SizedBox(height: 6,),
-                      Column(
-                        children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                                  decoration: BoxDecoration(
-                                    color: Colors.green.shade50,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.black12.withOpacity(0.05)),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.04),
-                                        offset: const Offset(0,2),
-                                        blurRadius: 6
-                                      )
-                                    ]
-                                  ),
-                                  
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text('Income', style: GoogleFonts.prompt(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.green.shade600),),
-                                      Text("+${currencyTh.format(dailyIncome)}", style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green.shade600),)
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 16,),
-                              Expanded(
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                                  decoration: BoxDecoration(
-                                    color: Colors.red.shade50,
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: Colors.black12.withOpacity(0.05)),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.04),
-                                        offset: const Offset(0,2),
-                                        blurRadius: 6
-                                      )
-                                    ]
-                                  ),
-                                  
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.end,
-                                    children: [
-                                      Text('Expense', style: GoogleFonts.prompt(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.red.shade600),),
-                                      Text("-${currencyTh.format(dailyExpense)}", style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red.shade600),),
-                                    ],
+                      if (widget.categoryId == null) ...[
+                        const SizedBox(height: 12,),
+                        Column(
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                                    decoration: BoxDecoration(
+                                      color: Colors.green.shade50,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: Colors.black12.withOpacity(0.05)),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.04),
+                                          offset: const Offset(0,2),
+                                          blurRadius: 6
+                                        )
+                                      ]
+                                    ),
+                                    
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('Income', style: GoogleFonts.prompt(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.green.shade600),),
+                                        Text("+${currencyTh.format(dailyIncome)}", style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.green.shade600),)
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                            ],
-                          )
-                        ],
-                      ),
+                                const SizedBox(width: 16,),
+                                Expanded(
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.shade50,
+                                      borderRadius: BorderRadius.circular(16),
+                                      border: Border.all(color: Colors.black12.withOpacity(0.05)),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Colors.black.withOpacity(0.04),
+                                          offset: const Offset(0,2),
+                                          blurRadius: 6
+                                        )
+                                      ]
+                                    ),
+                                    
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.end,
+                                      children: [
+                                        Text('Expense', style: GoogleFonts.prompt(fontSize: 12, fontWeight: FontWeight.w500, color: Colors.red.shade600),),
+                                        Text("-${currencyTh.format(dailyExpense)}", style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.red.shade600),),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            )
+                          ],
+                        ),
+                      ],
                       SizedBox(height: 16,),
                     ],
-                    InkWell(
-                      onTap:() => _openEditModal(item),
-                      borderRadius: BorderRadius.circular(16),
-                      child: Container(
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: isIncome ? Colors.green.shade50 : Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: Colors.black12,
-                            width: 1,
+                      Dismissible(
+                        key: Key('item_${item.item_id}'), // ใช้ ID รายการเป็น Key
+                        direction: DismissDirection.endToStart, // ปัดจากขวาไปซ้าย
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          decoration: BoxDecoration(
+                            color: Colors.red.shade400,
+                            borderRadius: BorderRadius.circular(16),
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.04),
-                              offset: const Offset(0,2),
-                              blurRadius: 6
-                            )
-                          ]
+                          child: const Icon(Icons.delete_outline, color: Colors.white),
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Expanded(
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
+                        confirmDismiss: (direction) async {
+                          // แจ้งเตือนยืนยัน
+                          return await showDialog(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              title: Text('Delete Transaction?', style: GoogleFonts.prompt(fontWeight: FontWeight.bold)),
+                              content: Text('Are you sure you want to delete "${item.item_name}"?'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(ctx, true), 
+                                  child: const Text('Delete', style: TextStyle(color: Colors.red)),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                        onDismissed: (direction) {
+                          setState(() {
+                            _hiddenItems.add(item.item_id);
+                          });
+                          _handleDelete(item);
+                        },
+                        child: InkWell(
+                        onTap:() => _openEditModal(item),
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: double.infinity,
+                          decoration: BoxDecoration(
+                            color: isIncome ? Colors.green.shade50 : Colors.red.shade50,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.black12,
+                              width: 1,
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                offset: const Offset(0,2),
+                                blurRadius: 6
+                              )
+                            ]
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.center,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 19,
+                                        backgroundColor: iconColor.withOpacity(0.15),
+                                        child: Icon(
+                                          iconData,
+                                          color: iconColor,
+                                          size: 20,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 14),
+                                        
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                                              textBaseline: TextBaseline.alphabetic,
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    item.item_name,
+                                                    style: GoogleFonts.prompt(
+                                                      color: isIncome ? Colors.green.shade600 : Colors.red.shade600,
+                                                      fontSize: 16, 
+                                                      fontWeight: FontWeight.w700
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  isIncome ? '' :
+                                                  " x${item.quantity}",
+                                                  style: GoogleFonts.prompt(
+                                                    color: Colors.grey,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                        
+                                            Row(
+                                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                                              textBaseline: TextBaseline.alphabetic,
+                                              children: [
+                                                Flexible(
+                                                  child: Text(
+                                                    item.note ?? '',
+                                                    style: GoogleFonts.prompt(
+                                                      fontWeight: FontWeight.w400,
+                                                      fontSize: 14,
+                                                      color: Colors.black54
+                                                    ),
+                                                    maxLines: 1,                
+                                                    overflow: TextOverflow.ellipsis,
+                                                    softWrap: true,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                        
+                                const SizedBox(width: 12),
+                        
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
-                                    CircleAvatar(
-                                      radius: 19,
-                                      backgroundColor: iconColor.withOpacity(0.15),
-                                      child: Icon(
-                                        iconData,
-                                        color: iconColor,
-                                        size: 20,
+                                    Text(
+                                      '$amountPrefix${currencyTh.format(item.total_price)}',
+                                      style: GoogleFonts.prompt(
+                                        color: amountColor,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 16,
                                       ),
                                     ),
-                                    const SizedBox(width: 14),
-                                      
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                                            textBaseline: TextBaseline.alphabetic,
-                                            children: [
-                                              Flexible(
-                                                child: Text(
-                                                  item.item_name,
-                                                  style: GoogleFonts.prompt(
-                                                    color: isIncome ? Colors.green.shade600 : Colors.red.shade600,
-                                                    fontSize: 16, 
-                                                    fontWeight: FontWeight.w700
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              Text(
-                                                isIncome ? '' :
-                                                " x${item.quantity}",
-                                                style: GoogleFonts.prompt(
-                                                  color: Colors.grey,
-                                                  fontSize: 12,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          const SizedBox(height: 4),
-                                      
-                                          Row(
-                                            crossAxisAlignment: CrossAxisAlignment.baseline,
-                                            textBaseline: TextBaseline.alphabetic,
-                                            children: [
-                                              Flexible(
-                                                child: Text(
-                                                  item.note ?? '',
-                                                  style: GoogleFonts.prompt(
-                                                    fontWeight: FontWeight.w400,
-                                                    fontSize: 14,
-                                                    color: Colors.black54
-                                                  ),
-                                                  maxLines: 1,                
-                                                  overflow: TextOverflow.ellipsis,
-                                                  softWrap: true,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ],
-                                      ),
+                        
+                                    const SizedBox(height: 4,),
+                                    
+                                    const Icon(
+                                      Icons.chevron_right_outlined,
+                                      size: 18,
+                                      color: Colors.grey,
                                     ),
                                   ],
                                 ),
-                              ),
-                      
-                              const SizedBox(width: 12),
-                      
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    '$amountPrefix${currencyTh.format(item.total_price)}',
-                                    style: GoogleFonts.prompt(
-                                      color: amountColor,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                      
-                                  const SizedBox(height: 4,),
-                                  
-                                  const Icon(
-                                    Icons.chevron_right_outlined,
-                                    size: 18,
-                                    color: Colors.grey,
-                                  ),
-                                ],
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                    )
                   ],
                 ),
               );
             }).toList()
-          ),
-        );
+          );
+        }
+      );
       }
-    );
   }
-}
 
 
 

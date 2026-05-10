@@ -12,7 +12,6 @@ android {
     ndkVersion = "27.0.12077973"
     namespace = "com.example.frontend"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -45,4 +44,12 @@ android {
 
 flutter {
     source = "../.."
+}
+
+configurations.all {
+    resolutionStrategy {
+        force("androidx.core:core:1.16.0")
+        force("androidx.core:core-ktx:1.16.0")
+        force("androidx.browser:browser:1.8.0")
+    }
 }

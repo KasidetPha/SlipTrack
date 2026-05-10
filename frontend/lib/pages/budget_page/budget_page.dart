@@ -1,15 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:frontend/services/receipt_service.dart';
-import 'package:frontend/utils/transaction_event.dart';
+import 'package:frontend/widgets/filter_month_year.dart';
 import 'package:google_fonts/google_fonts.dart';
-
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:frontend/providers/budget_provider.dart';
 import 'package:frontend/models/budget_model.dart';
-class BudgetPage extends StatefulWidget {
+
+class BudgetPage extends ConsumerStatefulWidget {
   const BudgetPage({super.key});
 
   @override
-  State<BudgetPage> createState() => _BudgetPageState();
+  ConsumerState<BudgetPage> createState() => _BudgetPageState();
 }
 
 // อัปเดตชุดสีให้ละมุนขึ้น สอดคล้องกับหน้าหลัก
@@ -22,11 +23,9 @@ class _AppColors {
   static const inputBg = Color(0xFFF3F4F6); // สีพื้นหลังช่องกรอกเงิน
 }
 
-class _BudgetPageState extends State<BudgetPage> {
+class _BudgetPageState extends ConsumerState<BudgetPage> {
   // final BudgetService _budgetService = BudgetService();
   
-  BudgetResponse? _budgetData;
-  bool _isLoading = true;
   bool _isSaving = false;
 
   late int _selectedMonth;
@@ -35,63 +34,26 @@ class _BudgetPageState extends State<BudgetPage> {
   // เก็บ Controllers ของแต่ละ Category
   final Map<int, TextEditingController> _controllers = {};
 
-  final List<String> _thaiMonths = [
-    '', 'มกราคม', 'กุมภาพันธ์', 'มีนาคม', 'เมษายน', 'พฤษภาคม', 'มิถุนายน',
-    'กรกฎาคม', 'สิงหาคม', 'กันยายน', 'ตุลาคม', 'พฤศจิกายน', 'ธันวาคม'
-  ];
-
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _selectedMonth = now.month;
     _selectedYear = now.year;
-    _fetchBudgets();
   }
 
-  Future<void> _fetchBudgets() async {
-    setState(() => _isLoading = true);
-    try {
-      final data = await ReceiptService().fetchBudgets(month: _selectedMonth, year: _selectedYear);
-
-      setState(() {
-        _budgetData = data;
-        _controllers.clear();
-        
-        if (_budgetData != null) {
-          for (var item in _budgetData!.items) {
-            _controllers[item.categoryId] = TextEditingController(
-              text: item.limitAmount > 0 ? item.limitAmount.toStringAsFixed(0) : '',
-            );
-          }
-        }
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาดในการโหลดข้อมูล: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _saveBudgets() async {
-    if (_budgetData == null) return;
+  Future<void> _saveBudgets(BudgetResponse budgetData) async {
 
     FocusScope.of(context).unfocus();
     setState(() => _isSaving = true);
 
     try {
-      for (var item in _budgetData!.items) {
+      for (var item in budgetData.items) {
         final text = _controllers[item.categoryId]?.text.replaceAll(',', '') ?? '0';
         item.limitAmount = double.tryParse(text) ?? 0.0;
       }
 
-      await ReceiptService().updateBudget(budget: _budgetData!);
-
-      TransactionEvent.triggerRefresh();
+      await ref.read(budgetControllerProvider).saveBudget(budgetData);
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -114,18 +76,15 @@ class _BudgetPageState extends State<BudgetPage> {
     }
   }
 
-  void _changeMonth(int add) {
-    setState(() {
-      _selectedMonth += add;
-      if (_selectedMonth > 12) {
-        _selectedMonth = 1;
-        _selectedYear += 1;
-      } else if (_selectedMonth < 1) {
-        _selectedMonth = 12;
-        _selectedYear -= 1;
-      }
-    });
-    _fetchBudgets();
+  void _syncControllers(BudgetResponse budgetData) {
+    for (final item in budgetData.items) {
+      _controllers.putIfAbsent(
+        item.categoryId,
+        () => TextEditingController(
+          text: item.limitAmount > 0 ? item.limitAmount.toStringAsFixed(0) : '',
+        ),
+      );
+    }
   }
 
   IconData _getIconData(String? iconName) {
@@ -149,6 +108,11 @@ class _BudgetPageState extends State<BudgetPage> {
 
   @override
   Widget build(BuildContext context) {
+    final budgetAsync = ref.watch(budgetProvider((
+      month: _selectedMonth,
+      year: _selectedYear,
+    )));
+
     return GestureDetector(
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
@@ -166,47 +130,44 @@ class _BudgetPageState extends State<BudgetPage> {
         ),
         body: Column(
           children: [
-            _buildMonthSelector(),
-            Expanded(
-              child: _isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : _budgetData == null
-                      ? Center(child: Text("ไม่พบข้อมูล", style: GoogleFonts.prompt(color: _AppColors.subtleText)))
-                      : _buildForm(),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
+              child: FilterMonthYear(
+                initialMonth: _selectedMonth,
+                initialYear: _selectedYear,
+                onMonthYearChanged: (month, year) {
+                  setState(() {
+                    _selectedMonth = month;
+                    _selectedYear = year;
+                  });
+                },
+                color: _AppColors.primary,
+              ),
             ),
-            _buildBottomBar(),
+            Expanded(
+              child: budgetAsync.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (err, stack) => Center(
+                  child: Text(
+                    'โหลดข้อมูลงบประมาณไม่สำเร็จ',
+                    style: GoogleFonts.prompt(color: _AppColors.subtleText),
+                  ),
+                ),
+                data: (budgetData) {
+                  _syncControllers(budgetData);
+
+                  return _buildForm(budgetData);
+                },
+              ),
+            ),
+            _buildBottomBar(budgetAsync.value),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMonthSelector() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            onPressed: () => _changeMonth(-1),
-            icon: const Icon(Icons.chevron_left_rounded, size: 28),
-            color: _AppColors.subtleText,
-          ),
-          Text(
-            'เดือน${_thaiMonths[_selectedMonth]} ${_selectedYear}',
-            style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.bold, color: _AppColors.primary),
-          ),
-          IconButton(
-            onPressed: () => _changeMonth(1),
-            icon: const Icon(Icons.chevron_right_rounded, size: 28),
-            color: _AppColors.subtleText,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildForm() {
+  Widget _buildForm(BudgetResponse budgetData) {
     return ListView(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       children: [
@@ -229,12 +190,12 @@ class _BudgetPageState extends State<BudgetPage> {
                 contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
                 title: Text('แจ้งเตือนเมื่อใกล้ถึงงบ', style: GoogleFonts.prompt(fontWeight: FontWeight.w600, fontSize: 15)),
                 subtitle: Text('ให้ระบบเตือนเมื่อยอดใช้จ่ายใกล้เต็ม', style: GoogleFonts.prompt(fontSize: 13, color: _AppColors.subtleText)),
-                value: _budgetData!.warningEnabled,
+                value: budgetData.warningEnabled,
                 activeColor: _AppColors.primary,
-                onChanged: (val) => setState(() => _budgetData!.warningEnabled = val),
+                onChanged: (val) => setState(() => budgetData.warningEnabled = val),
               ),
               
-              if (_budgetData!.warningEnabled) ...[
+              if (budgetData.warningEnabled) ...[
                 Divider(height: 1, color: Colors.grey.shade100, indent: 20, endIndent: 20),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
@@ -242,19 +203,19 @@ class _BudgetPageState extends State<BudgetPage> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('แจ้งเตือนเมื่อยอดถึง', style: GoogleFonts.prompt(fontSize: 14, color: _AppColors.text)),
-                      Text('${_budgetData!.warningPercentage}%', style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.bold, color: _AppColors.primary)),
+                      Text('${budgetData.warningPercentage}%', style: GoogleFonts.prompt(fontSize: 16, fontWeight: FontWeight.bold, color: _AppColors.primary)),
                     ],
                   ),
                 ),
                 Slider(
-                  value: _budgetData!.warningPercentage.toDouble(),
+                  value: budgetData.warningPercentage.toDouble(),
                   min: 50,
                   max: 100,
                   divisions: 10,
                   activeColor: _AppColors.primary,
                   inactiveColor: _AppColors.primary.withOpacity(0.15),
                   onChanged: (val) {
-                    setState(() => _budgetData!.warningPercentage = val.toInt());
+                    setState(() => budgetData.warningPercentage = val.toInt());
                   },
                 ),
                 const SizedBox(height: 8),
@@ -271,9 +232,9 @@ class _BudgetPageState extends State<BudgetPage> {
         ListView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          itemCount: _budgetData!.items.length,
+          itemCount: budgetData.items.length,
           itemBuilder: (context, index) {
-            final item = _budgetData!.items[index];
+            final item = budgetData.items[index];
             final color = Color(int.parse((item.colorHex ?? '#7F8C8D').replaceFirst('#', '0xFF')));
             
             return Container(
@@ -353,7 +314,7 @@ class _BudgetPageState extends State<BudgetPage> {
     );
   }
 
-  Widget _buildBottomBar() {
+  Widget _buildBottomBar(BudgetResponse? budgetData) {
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 32), // เผื่อที่ว่างด้านล่างสำหรับขอบจอโทรศัพท์
       decoration: BoxDecoration(
@@ -363,7 +324,9 @@ class _BudgetPageState extends State<BudgetPage> {
         width: double.infinity,
         height: 54,
         child: ElevatedButton(
-          onPressed: (_isLoading || _isSaving) ? null : _saveBudgets,
+          onPressed: (_isSaving || budgetData == null)
+          ? null
+          : () => _saveBudgets(budgetData),
           style: ElevatedButton.styleFrom(
             backgroundColor: _AppColors.primary,
             foregroundColor: Colors.white,

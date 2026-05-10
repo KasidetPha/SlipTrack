@@ -1,5 +1,12 @@
 import 'dart:convert';
 
+bool _toBool(dynamic value) {
+  if (value is bool) return value;
+  if (value is int) return value == 1;
+  if (value is String) return value == '1' || value.toLowerCase() == 'true';
+  return false;
+}
+
 class BudgetCategoryItem {
   final int categoryId;
   final String categoryName;
@@ -53,14 +60,14 @@ class BudgetResponse {
 
   factory BudgetResponse.fromJson(Map<String, dynamic> json) {
     return BudgetResponse(
-      month: json['month'] as int, 
-      year: json['year'] as int, 
-      warningEnabled: json['warning_enabled'] as bool, 
-      warningPercentage: json['warning_percentage'] as int, 
-      overspendingEnabled: json['overspending_enabled'] as bool, 
+      month: json['month'] as int,
+      year: json['year'] as int,
+      warningEnabled: _toBool(json['warning_enabled']),
+      warningPercentage: json['warning_percentage'] as int,
+      overspendingEnabled: _toBool(json['overspending_enabled']),
       items: (json['items'] as List<dynamic>)
-        .map((e) => BudgetCategoryItem.fromJson(e as Map<String, dynamic>))
-        .toList(),
+          .map((e) => BudgetCategoryItem.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 

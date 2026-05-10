@@ -1,6 +1,7 @@
 // services/category_service.dart
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:frontend/services/api_client.dart';
 import '../models/category_master.dart';
 
 class CategoryService {
@@ -8,43 +9,37 @@ class CategoryService {
   static final CategoryService _instance = CategoryService._internal();
   factory CategoryService() => _instance;
 
-  final Dio _dio = Dio(
-    BaseOptions(
-      baseUrl: 'http://192.168.1.12:8000',
-      connectTimeout: const Duration(seconds: 5),
-      receiveTimeout: const Duration(seconds: 5)
-    ), // เปลี่ยนเป็นของคุณ
-  );
+  final Dio _dio = ApiClient().dio;
 
   // cache
   Map<String, List<CategoryMaster>> _cacheByUser = {};
 
   // ====== ICON / COLOR MAP (config ส่วน UI) ====== 
-  static const Map<String, Map<int, IconData>> _iconMap = {
-    "expense": {
-      1: Icons.category,       // Others
-      2: Icons.restaurant,     // Food
-      3: Icons.shopping_bag,   // Shopping
-      4: Icons.receipt_long,   // Bills
-    },
-    "income": {
-      1: Icons.payments,       // Salary
-      2: Icons.wallet,         // Wages / Freelance (ตัวอย่าง)
-    },
-  };
+  // static const Map<String, Map<int, IconData>> _iconMap = {
+  //   "expense": {
+  //     1: Icons.category,       // Others
+  //     2: Icons.restaurant,     // Food
+  //     3: Icons.shopping_bag,   // Shopping
+  //     4: Icons.receipt_long,   // Bills
+  //   },
+  //   "income": {
+  //     1: Icons.payments,       // Salary
+  //     2: Icons.wallet,         // Wages / Freelance (ตัวอย่าง)
+  //   },
+  // };
 
-  static const Map<String, Map<int, Color>> _colorMap = {
-    "expense": {
-      1: Color(0xFF7F8C8D),
-      2: Color(0xFFE67E22),
-      3: Color(0xFF2980B9),
-      4: Color(0xFF27AE60),
-    },
-    "income": {
-      1: Color(0xFF2ECC71),
-      2: Color(0xFF3498DB),
-    },
-  };
+  // static const Map<String, Map<int, Color>> _colorMap = {
+  //   "expense": {
+  //     1: Color(0xFF7F8C8D),
+  //     2: Color(0xFFE67E22),
+  //     3: Color(0xFF2980B9),
+  //     4: Color(0xFF27AE60),
+  //   },
+  //   "income": {
+  //     1: Color(0xFF2ECC71),
+  //     2: Color(0xFF3498DB),
+  //   },
+  // };
 
   static const IconData defaultIcon = Icons.label_important_outline;
   static const Color defaultColor = Colors.grey;
@@ -171,17 +166,17 @@ class CategoryService {
 
   // ====== helper: icon / color จาก categoryId + entryType ======
 
-  IconData iconFor(int? categoryId, String? entryType) {
-    if (categoryId == null || entryType == null) return defaultIcon;
-    final mapByType = _iconMap[entryType];
-    if (mapByType == null) return defaultIcon;
-    return mapByType[categoryId] ?? defaultIcon;
-  }
+  // IconData iconFor(int? categoryId, String? entryType) {
+  //   if (categoryId == null || entryType == null) return defaultIcon;
+  //   final mapByType = _iconMap[entryType];
+  //   if (mapByType == null) return defaultIcon;
+  //   return mapByType[categoryId] ?? defaultIcon;
+  // }
 
-  Color colorFor(int? categoryId, String? entryType) {
-    if (categoryId == null || entryType == null) return defaultColor;
-    final mapByType = _colorMap[entryType];
-    if (mapByType == null) return defaultColor;
-    return mapByType[categoryId] ?? defaultColor;
-  }
+  // Color colorFor(int? categoryId, String? entryType) {
+  //   if (categoryId == null || entryType == null) return defaultColor;
+  //   final mapByType = _colorMap[entryType];
+  //   if (mapByType == null) return defaultColor;
+  //   return mapByType[categoryId] ?? defaultColor;
+  // }
 }

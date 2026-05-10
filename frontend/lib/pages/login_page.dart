@@ -2,18 +2,22 @@ import 'dart:ui';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:frontend/pages/forgot_password_page.dart';
+import 'package:frontend/pages/register_page.dart';
+import 'package:frontend/providers/profile_provider.dart';
 import 'package:frontend/services/auth_service.dart';
 import 'package:frontend/widgets/bottom_nav_page.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-class LoginPage extends StatefulWidget {
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends ConsumerState<LoginPage> {
   final _auth = AuthService();
 
   final emailController = TextEditingController();
@@ -25,17 +29,17 @@ class _LoginPageState extends State<LoginPage> {
 
   final Map<String, Map<String, String>> _testPresets = {
     'User1' : {
-      'email': 'pimchanok@example.com',
-      'password': '123456'
+      'email': 'b@b.b',
+      'password': '12345678'
     },
-    'User2': {
-      'email': 'arunwat@example.com',
-      'password': '123456',
+    'User2' : {
+      'email': 'c@c.c',
+      'password': '12345678za'
     },
-    'User3': {
-      'email': 'kittipat@example.com',
-      'password': '123456'
-    }
+    'User3' : {
+      'email': 'd@d.d',
+      'password': '12345678z'
+    },
   };
   
   // สีหลัก เขียว
@@ -61,38 +65,42 @@ class _LoginPageState extends State<LoginPage> {
     try {
       await _auth.login(
         email: emailController.text.trim(),
-        password: passwordController.text.trim()
+        password: passwordController.text.trim(),
       );
+
+      // สำคัญ: สั่งให้ Profile โหลดข้อมูลใหม่หลัง Login
 
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Login Seccess"))
+        const SnackBar(content: Text("Login Success")),
       );
 
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (ctx) => const BottomNavPage()
-        )
+        MaterialPageRoute(
+          builder: (ctx) => const BottomNavPage(),
+        ),
       );
+      ref.invalidate(userProfileProvider);
     } on DioException catch (err) {
       final data = err.response?.data;
       final msg = data is Map
-        ? (data['message'] ?? data['error'] ?? err.message)
-        : (data?.toString() ?? err.message);
+          ? (data['message'] ?? data['error'] ?? err.message)
+          : (data?.toString() ?? err.message);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Login failed: $msg"))
+        SnackBar(content: Text("Login failed: $msg")),
       );
     } catch (err) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Login failed $err"))
+        SnackBar(content: Text("Login failed $err")),
       );
     } finally {
       if (mounted) setState(() => isLoading = false);
     }
   }
-
+  
   @override
   void dispose() {
     emailController.dispose();
@@ -380,7 +388,7 @@ class _LoginPageState extends State<LoginPage> {
                 const Spacer(),
                 TextButton(
                   onPressed: isLoading ? null : () {
-                    // navigate
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => ForgotPasswordPage()));
                   }, 
                   style: TextButton.styleFrom(
                     padding: EdgeInsets.zero,
@@ -395,7 +403,7 @@ class _LoginPageState extends State<LoginPage> {
               ]
             ),
             const SizedBox(height: 10,),
-            _buildQuickFillCard(),
+            // _buildQuickFillCard(),
             
             const SizedBox(height: 14,),
 
@@ -458,8 +466,27 @@ class _LoginPageState extends State<LoginPage> {
                   TextButton(
                     onPressed: isLoading 
                     ? null 
-                    : () {
-                      // navigate
+                    : () async {
+                      final result = await Navigator.push<Map<String, String>>(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const RegisterPage(),
+                        ),
+                      );
+
+                      if (result != null) {
+                        setState(() {
+                          emailController.text = result['email'] ?? '';
+                          passwordController.text = result['password'] ?? '';
+                        });
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Filled registered account'),
+                            duration: Duration(seconds: 1),
+                          ),
+                        );
+                      }
                     }, 
                     style: TextButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -467,7 +494,7 @@ class _LoginPageState extends State<LoginPage> {
                       tapTargetSize: MaterialTapTargetSize.shrinkWrap
                     ),
                     child: Text('Register', style: GoogleFonts.prompt(fontSize: 13, fontWeight: FontWeight.w600, color: kAccentBlue),),
-                  )
+                  ),
                 ],
               ),
             )

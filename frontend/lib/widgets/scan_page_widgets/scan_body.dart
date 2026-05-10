@@ -1,12 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:async';
 
 import 'package:dotted_border/dotted_border.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:frontend/models/receipt_item.dart';
 import 'package:frontend/services/receipt_service.dart';
-import 'package:frontend/utils/transaction_event.dart';
 import 'package:frontend/widgets/Edit_Receipt_Item_Sheet.dart';
 import 'package:frontend/widgets/scan_page_widgets/receipt_preview_overlay.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,15 +16,16 @@ import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:frontend/providers/transaction_provider.dart';
 
-class ScanBody extends StatefulWidget {
+class ScanBody extends ConsumerStatefulWidget {
   const ScanBody({super.key});
 
   @override
-  State<ScanBody> createState() => _ScanBodyState();
+  ConsumerState<ScanBody> createState() => _ScanBodyState();
 }
 
-class _ScanBodyState extends State<ScanBody> {
+class _ScanBodyState extends ConsumerState<ScanBody> {
   // ====== Mock data: เรียกใช้กับ modal (UI เท่านั้น) ======
   final ImagePicker _picker = ImagePicker();
   bool _isScanning = false;
@@ -35,6 +37,24 @@ class _ScanBodyState extends State<ScanBody> {
 
   String _detectedMerchant = "ไม่ทราบชื่อร้าน";
   DateTime _selectedReceiptDate = DateTime.now();
+
+  Timer? _scanStatusTimer;
+  int _scanStatusIndex = 0;
+
+  String normalize(String s) {
+    return s
+      .toLowerCase()
+      .trim()
+      .replaceAll(RegExp(r'\s+'), ' ');
+  }
+
+  final List<String> _scanMessages = [
+    "กำลังอ่านข้อความจากใบเสร็จ...",
+    "กำลังแยกรายการสินค้า...",
+    "กำลังวิเคราะห์หมวดหมู่...",
+    "กำลังคำนวณยอดรวม...",
+    "กำลังจัดเตรียมผลลัพธ์...",
+  ];
 
   Future<void> _pickImage(ImageSource source) async {
     if (_isScanning) return;
@@ -62,7 +82,22 @@ class _ScanBodyState extends State<ScanBody> {
   }
 
   Future<void> _uploadAndScanReceipt(File imageFile) async {
-    setState(() => _isScanning = true);
+    setState(() {
+      _isScanning = true;
+      _scanStatusIndex = 0;
+    });
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      barrierColor: Colors.black.withOpacity(0.82),
+      builder: (_) => _ScanLoadingOverlay(
+        message: _scanMessages[_scanStatusIndex],
+        imageFile: _lastPickedImage,
+      ),
+    );
+
+    _startScanStatusTimer();
 
     try {
       const String scanApiUrl = "http://192.168.1.12:8000/scan-receipt";
@@ -114,8 +149,16 @@ class _ScanBodyState extends State<ScanBody> {
           }
 
           if (mounted) {
-            _showScanResultSheet(context, items);
-          }
+            Navigator.of(context, rootNavigator: true).pop();
+            setState(() => _isScanning = false);
+
+            await Future.delayed(const Duration(milliseconds: 150));
+
+            if (mounted) {
+              await _showScanResultSheet(context, items);
+            }
+          return;
+        }
         } else {
           print("ไม่พบ items ใน Response");
 
@@ -137,18 +180,69 @@ class _ScanBodyState extends State<ScanBody> {
         SnackBar(content: Text('เกิดข้อผิดพลาดในการแสกน: $e'))
       );
     } finally {
-      if (mounted) setState(() => _isScanning = false);
+      _stopScanStatusTimer();
+
+      if (mounted && _isScanning) {
+        Navigator.of(context, rootNavigator: true).pop();
+        setState(() => _isScanning = false);
+      }
     }
+  }
+
+  void _startScanStatusTimer() {
+    _scanStatusTimer?.cancel();
+    _scanStatusIndex = 0;
+
+    _scanStatusTimer = Timer.periodic(const Duration(seconds: 5), (timer) {
+      if (!mounted) return;
+
+      setState(() {
+        _scanStatusIndex = (_scanStatusIndex + 1) % _scanMessages.length;
+      });
+    });
+  }
+
+  void _stopScanStatusTimer() {
+    _scanStatusTimer?.cancel();
+    _scanStatusTimer = null;
+    _scanStatusIndex = 0;
+  }
+
+  IconData getIconFromName(String? name) {
+    switch (name) {
+      case 'restaurant':
+        return Icons.restaurant;
+      case 'shopping_bag':
+        return Icons.shopping_bag;
+      case 'receipt_long':
+        return Icons.receipt_long;
+      case 'directions_bus':
+        return Icons.directions_bus;
+      case 'payments':
+        return Icons.payments;
+      default:
+        return Icons.category;
+    }
+  }
+
+  Color hexToColor(String? hex) {
+    if (hex == null || hex.isEmpty) return Colors.grey;
+
+    final cleanHex = hex.replaceFirst('#', '');
+    return Color(int.parse('FF$cleanHex', radix: 16));
   }
 
   List<ReceiptScanResult> _parseItems(List<dynamic> jsonItems) {
     // 1. แปลงข้อมูล JSON เป็น Object ตามปกติ
     final parsedList = jsonItems.map((item) {
-      // รองรับทั้ง key 'price', 'unit_price' และ 'total_item_price'
-      final priceStr = item['price'] ?? item['unit_price'] ?? item['total_item_price'] ?? '0';
-      final price = double.tryParse(priceStr.toString()) ?? 0.0;
-      
+      final unitPrice = double.tryParse('${item['unit_price'] ?? item['price'] ?? 0}') ?? 0.0;
+      final totalItemPrice = double.tryParse('${item['total_item_price'] ?? 0}') ?? 0.0;
+
       final qty = int.tryParse('${item['qty']}') ?? 1;
+      final amount = totalItemPrice > 0 ? totalItemPrice : unitPrice * qty;
+      final iconName = item['icon_name'];
+      final colorHex = item['color_hex'];
+
       int catId = int.tryParse('${item['category_id']}') ?? 1;
 
       DateTime date;
@@ -160,16 +254,16 @@ class _ScanBodyState extends State<ScanBody> {
       
       return ReceiptScanResult(
         id: UniqueKey().toString(),
-        title: item['name'] ?? 'Unknown', 
-        icon: Icons.restaurant, 
-        iconBg: const Color(0xFFE67E22), 
-        date: date, 
-        qty: qty, 
-        amount: -(price * qty), 
+        title: item['name'] ?? 'Unknown',
+        icon: getIconFromName(iconName),
+        iconBg: hexToColor(colorHex),
+        date: date,
+        qty: qty,
+        amount: -amount,
         categoryId: catId,
         boundingBox: item['bounding_box'] != null
-          ? BoundingBox.fromJson(item['bounding_box'])
-          : null
+            ? BoundingBox.fromJson(item['bounding_box'])
+            : null,
       );
     }).toList();
 
@@ -198,11 +292,13 @@ class _ScanBodyState extends State<ScanBody> {
         items: itemsToSave
       );
 
-      TransactionEvent.triggerRefresh();
+      await Future.delayed(const Duration(milliseconds: 300));
+      ref.read(transactionControllerProvider).refreshData();
 
       if (!mounted) return;
 
-      Navigator.of(context).popUntil((route) => route.isFirst);
+      Navigator.of(modalContext).pop();
+      Navigator.of(context).pop(true);
 
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -223,6 +319,12 @@ class _ScanBodyState extends State<ScanBody> {
     } finally {
       if (mounted) setState(() => _isSavingBatch = false);
     }
+  }
+
+  @override
+  void dispose() {
+    _scanStatusTimer?.cancel();
+    super.dispose();
   }
 
   @override
@@ -342,24 +444,6 @@ class _ScanBodyState extends State<ScanBody> {
             ],
           ),
         ),
-
-        if (_isScanning) 
-          Container(
-            color: Colors.black.withOpacity(0.5),
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const CircularProgressIndicator(
-                    color: Colors.white
-                  ),
-                  const SizedBox(height: 16,),
-                  Text("กำลังประมวลผล OCR...",
-                    style: GoogleFonts.prompt(color: Colors.white, fontSize: 16),),
-                ],
-              ),
-            )
-          )
       ],
     );
   }
@@ -379,6 +463,7 @@ class _ScanBodyState extends State<ScanBody> {
       ),
       builder: (ctx) {
         return StatefulBuilder(
+          
           builder: (BuildContext context, StateSetter setModelState) {
             return DraggableScrollableSheet(
               initialChildSize: 0.85, 
@@ -392,7 +477,7 @@ class _ScanBodyState extends State<ScanBody> {
                   controller: scrollCtrl,
                   slivers: [
                     
-// --- ส่วนที่ 1: Header และ รูปภาพ ---
+                  // --- ส่วนที่ 1: Header และ รูปภาพ ---
                     SliverToBoxAdapter(
                       child: Column(
                         children: [
@@ -647,7 +732,6 @@ class _ScanBodyState extends State<ScanBody> {
                                   iconBg: it.iconBg,
                                   title: it.title,
                                   qtyText: 'x${it.qty}',
-                                  dateText: dateFmt.format(it.date), // รายการจะยังแสดงวันที่จาก OCR อยู่ (ถ้าต้องการเปลี่ยนให้โชว์เป็น _selectedReceiptDate ก็แก้ตรงนี้ได้ครับ)
                                   amountText: currency.format(it.amount.abs()),
                                   isExpense: it.amount < 0,
                                   onTap: () async {
@@ -662,19 +746,34 @@ class _ScanBodyState extends State<ScanBody> {
                                     );
                                             
                                     if (updated != null && updated is ReceiptItem) {
+                                      final oldName = it.title.trim().replaceAll(RegExp(r'\s+'), ' ');
+                                      final newName = updated.item_name.trim().replaceAll(RegExp(r'\s+'), ' ');
+
+                                      if (oldName != newName) {
+                                        try {
+                                          ReceiptService().saveOcrCorrection(
+                                            wrongText: oldName,
+                                            correctText: newName,
+                                          );
+                                        } catch (_) {}
+                                      }
+
                                       setModelState(() {
                                         items[i] = ReceiptScanResult(
                                           id: it.id,
-                                          title: updated.item_name, 
-                                          icon: it.icon, 
-                                          iconBg: it.iconBg, 
-                                          date: updated.receiptDate, 
-                                          qty: updated.quantity, 
+                                          title: updated.item_name,
+                                          icon: it.icon,
+                                          iconBg: it.iconBg,
+                                          date: updated.receiptDate,
+                                          qty: updated.quantity,
                                           categoryId: updated.category_id,
-                                          amount: updated.entryType == 'expense' ? -updated.total_price : updated.total_price,
+                                          amount: updated.entryType == 'expense'
+                                              ? -updated.total_price
+                                              : updated.total_price,
                                           boundingBox: it.boundingBox,
                                         );
                                       });
+
                                       if (mounted) setState(() {});
                                     }
                                   },
@@ -726,7 +825,7 @@ class _ReceiptTile extends StatelessWidget {
     required this.iconBg,
     required this.title,
     required this.qtyText,
-    required this.dateText,
+    // required this.dateText,
     required this.amountText,
     required this.isExpense,
     this.onTap,
@@ -736,10 +835,17 @@ class _ReceiptTile extends StatelessWidget {
   final Color iconBg;
   final String title;
   final String qtyText;
-  final String dateText;
+  // final String dateText;
   final String amountText;
   final bool isExpense;
   final VoidCallback? onTap;
+
+  String truncateWithCount(String text, {int maxLength = 18}) {
+    if (text.length <= maxLength) return text;
+
+    // final remain = text.length - maxLength;
+    return '${text.substring(0, maxLength)}...';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -782,11 +888,21 @@ class _ReceiptTile extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(
-                            title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: GoogleFonts.prompt(fontSize: 15, fontWeight: FontWeight.w700),
+                          child: Row(
+                            children: [
+                              Text(
+                                truncateWithCount(title, maxLength: 18),
+                                maxLines: 1,
+                                overflow: TextOverflow.clip,
+                                style: GoogleFonts.prompt(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              SizedBox(width: 10,),
+                              Text(qtyText,
+                                style: GoogleFonts.prompt(fontSize: 12, color: cs.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 6),
@@ -801,16 +917,6 @@ class _ReceiptTile extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    // บรรทัดสอง: date + x1
-                    Row(
-                      children: [
-                        Text(dateText,
-                            style: GoogleFonts.prompt(fontSize: 12, color: cs.onSurfaceVariant)),
-                        const SizedBox(width: 8),
-                        Text(qtyText,
-                            style: GoogleFonts.prompt(fontSize: 12, color: cs.onSurfaceVariant)),
-                      ],
-                    ),
                   ],
                 ),
               ),
@@ -845,6 +951,140 @@ class ReceiptScanResult {
     this.categoryId,
     this.boundingBox
   });
+}
+
+class _ScanLoadingOverlay extends StatefulWidget {
+  const _ScanLoadingOverlay({
+    required this.message,
+    this.imageFile,
+  });
+
+  final String message;
+  final File? imageFile;
+
+  @override
+  State<_ScanLoadingOverlay> createState() => _ScanLoadingOverlayState();
+}
+
+class _ScanLoadingOverlayState extends State<_ScanLoadingOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _laserPosition;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    _laserPosition = Tween<double>(begin: 0, end: 1).animate(
+      CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.transparent,
+      child: Center(
+        child: Container(
+          width: MediaQuery.of(context).size.width * 0.86,
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 22),
+          decoration: BoxDecoration(
+            color: Colors.black.withOpacity(0.92),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.15)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedBuilder(
+                animation: _laserPosition,
+                builder: (context, child) {
+                  return SizedBox(
+                    width: 230,
+                    height: 330,
+                    child: AnimatedScale(
+                      scale: 1.02,
+                      duration: const Duration(milliseconds: 900),
+                      curve: Curves.easeInOut,
+                      child: Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(14),
+                            child: Container(
+                              width: 230,
+                              height: 330,
+                              color: Colors.black,
+                              child: widget.imageFile != null
+                                  ? Image.file(
+                                      widget.imageFile!,
+                                      fit: BoxFit.contain,
+                                    )
+                                  : const Center(
+                                      child: Icon(
+                                        Icons.receipt_long_rounded,
+                                        color: Colors.white54,
+                                        size: 90,
+                                      ),
+                                    ),
+                            ),
+                          ),
+
+                          // เส้นแดงเลื่อนขึ้นลง
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            top: _laserPosition.value * 310,
+                            child: Container(
+                              height: 3,
+                              color: Colors.redAccent,
+                            ),
+                          ),
+                        ],
+                      )
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 20),
+
+              Text(
+                widget.message,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.prompt(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                "กรุณารอสักครู่ ระบบกำลังประมวลผลใบเสร็จ",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.prompt(
+                  color: Colors.white70,
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 // ====== Tips Box (เดิม) ======

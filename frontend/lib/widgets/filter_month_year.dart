@@ -5,12 +5,14 @@ class FilterMonthYear extends StatefulWidget {
 
   final int? initialMonth;
   final int? initialYear;
+  final Color color;
   
   const FilterMonthYear({
     super.key,
     this.onMonthYearChanged,
     this.initialMonth,
-    this.initialYear
+    this.initialYear,
+    required this.color,
   });
 
   @override
@@ -76,16 +78,16 @@ class _FilterMonthYearState extends State<FilterMonthYear> {
           IconButton(
             onPressed: _prev,
             icon: const Icon(Icons.chevron_left_outlined),
-            color: Colors.white,
+            color: widget.color,
           ),
           SizedBox(width: 2,),
-          Icon(Icons.calendar_month_rounded, color: Colors.white,),
-          Text(" ${months[_month - 1]} ", style: TextStyle(color: Colors.white),),
-          Text("$_year", style: TextStyle(color: Colors.white),),
+          Icon(Icons.calendar_month_rounded, color: widget.color,),
+          Text(" ${months[_month - 1]} ", style: TextStyle(color: widget.color),),
+          Text("$_year", style: TextStyle(color: widget.color),),
           SizedBox(width: 2,),
           IconButton(
             onPressed: _next,
-            icon: const Icon(Icons.chevron_right_outlined), color: Colors.white,
+            icon: const Icon(Icons.chevron_right_outlined), color: widget.color,
           ),
           
         ],

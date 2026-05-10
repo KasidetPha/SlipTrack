@@ -11,6 +11,8 @@ import 'package:frontend/models/stats_summary.dart';
 import 'package:frontend/models/user_profile.dart';
 import 'package:frontend/services/api_client.dart';
 import 'package:intl/intl.dart';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiException implements Exception {
   final int? statusCode;
@@ -27,7 +29,7 @@ class ReceiptService {
   factory ReceiptService() => _i;
 
   final Dio _dio = ApiClient().dio;
-  final ApiClient _apiClient = ApiClient();
+  // final ApiClient _apiClient = ApiClient();
 
   // ดึงรายการสินค้าตามเดือน/รายปี
   Future<List<ReceiptItem>> fetchReceiptItems({
@@ -164,6 +166,12 @@ class ReceiptService {
           .map(CategoryTotal.fromJson)
           .toList()
           ..sort((a,b) => b.totalSpent.compareTo(a.totalSpent)); // เรียงจากมากไปน้อย
+
+          debugPrint("CATEGORY RAW: ${res.data}");
+          debugPrint(
+            "CATEGORY MAPPED: ${list.map((e) => '${e.categoryName}: ${e.totalSpent}').toList()}",
+          );
+
         return list;
       }
 
@@ -218,12 +226,13 @@ class ReceiptService {
   Future<List<CategorySummary>> fetchCategorySummary({
     required int month,
     required int year,
+    required String entryType,
     CancelToken? cancelToken
   }) async {
     try {
       final res = await _dio.post(
         '/categories/summary',
-        data: {'month': month, 'year': year},
+        data: {'month': month, 'year': year, 'entry_type': entryType,},
         cancelToken: cancelToken
       );
 
@@ -320,6 +329,7 @@ class ReceiptService {
     required int categoryId,
     int? month,
     int? year,
+    String entryType = 'expense',
     CancelToken? cancelToken
   }) async {
     try {
@@ -328,8 +338,9 @@ class ReceiptService {
       final Map<String, dynamic> body = {
         if (month != null) 'month': month,
         if (year != null) 'year': year,
+        'entry_type': entryType,
       };
-
+      debugPrint("FETCH BY CATEGORY BODY: $body");
       final res = await _dio.post(
         path,
         data: body,
@@ -577,6 +588,22 @@ class ReceiptService {
     }
   }
 
+  Future<void> saveOcrCorrection({
+    required String wrongText,
+    required String correctText,
+  }) async {
+    if (wrongText.trim().isEmpty || correctText.trim().isEmpty) return;
+    if (wrongText.trim() == correctText.trim()) return;
+
+    await _dio.post(
+      '/ocr-correction',
+      data: {
+        'wrong_text': wrongText.trim(),
+        'correct_text': correctText.trim(),
+      },
+    );
+  }
+
   Future<void> updateIncome({
     required int id,
     required String incomeSource,
@@ -660,41 +687,55 @@ class ReceiptService {
     }
   }
 
-  Future<UserProfile> fetchUserProfile({
+  Future<String?> predictCategory(String itemName, {
     CancelToken? cancelToken,
   }) async {
     try {
       final res = await _dio.get(
-        '/api/users/profile',
-        cancelToken: cancelToken,
+        '/predict-category',
+        queryParameters: {'item_name': itemName},
+        cancelToken: cancelToken
       );
 
       if (res.statusCode == 200) {
-        final data = res.data;
-        if (data is! Map) {
-          throw ApiException('Unexpected response shape', statusCode: res.statusCode);
-        }
-        return UserProfile.fromJson(Map<String, dynamic>.from(data));
+        return res.data['category_name']?.toString();
       }
 
-      if (res.statusCode == 401 || res.statusCode == 403) {
-        throw ApiException('Unauthorized', statusCode: res.statusCode);
-      }
-      throw ApiException('Fetch profile failed', statusCode: res.statusCode);
-      
+      return null;
     } on DioException catch (e) {
-      final code = e.response?.statusCode;
-      final dynamic body = e.response?.data;
-      final msg = (body is Map && (body['message'] != null || body['detail'] != null))
-          ? (body['message'] ?? body['detail']).toString()
-          : e.message ?? 'Network error';
-
-      print("Error fetching profile: $msg");
-      // ส่งค่า Default กลับไปเพื่อไม่ให้แอปแครช
-      return UserProfile(displayName: "Offline", email: "Please check connection", balance: 0.0);
+      debugPrint("Predict Category Error: ${e.message}");
     } catch (e) {
-      print("Unexpected error fetching profile: $e");
-      return UserProfile(displayName: "Error", email: "Internal error", balance: 0.0);
+      debugPrint("Unexpected Error: $e");
+      return null;
+    }
+  }
+
+
+
+  // ดึงข้อมูลสรุป Dashboard
+  Future<Map<String, dynamic>> getDashboardSummary({int? month, int?year}) async {
+    final prefs = await SharedPreferences.getInstance();
+    final token = prefs.getString('token');
+
+    try {
+      final res = await _dio.get(
+        '/dashboard/summary',
+        queryParameters: {
+          if (month != null) 'month': month,
+          if (year != null) "year": year
+        },
+        options: Options(
+          headers: {'Authorization': 'Bearer $token'},
+        ),
+      );
+
+      if (res.statusCode == 200) {
+        return res.data;
+      } else {
+        throw Exception("Failed to load dashboard: ${res.statusCode}");
+      }
+    } catch (e) {
+      throw Exception("Error fetching dashboard: $e");
     }
   }
 
@@ -749,4 +790,19 @@ class ReceiptService {
     }
   }
 
+  Future<bool> deleteTransaction(int id, String entryType) async {
+    try {
+      // แยกยิงตามประเภทว่าเป็น income หรือ expense ตามที่เราแยกไว้ใน Backend
+      final typePath = (entryType == 'income') ? 'income' : 'expense';
+      
+      final response = await ApiClient().dio.delete('/items/$typePath/$id');
+
+      final code = response.statusCode ?? 0;
+      return code >= 200 && code < 300;
+
+    } catch (e) {
+      debugPrint("Error deleting item: $e");
+      return false;
+    }
+  }
 }

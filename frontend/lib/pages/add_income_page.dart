@@ -1,23 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:frontend/models/category_master.dart';
 import 'package:frontend/models/receipt_item.dart';
+import 'package:frontend/providers/profile_provider.dart';
+import 'package:frontend/providers/transaction_provider.dart';
 import 'package:frontend/services/category_service.dart';
 import 'package:frontend/services/receipt_service.dart';
+import 'package:frontend/utils/category_icon_mapper.dart';
 import 'package:frontend/utils/transaction_event.dart';
+import 'package:frontend/widgets/category_form_bottom_sheet.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 enum CategoryMode { auto, manual }
 
-class AddIncomePage extends StatefulWidget {
+class AddIncomePage extends ConsumerStatefulWidget {
   const AddIncomePage({super.key});
 
   @override
-  State<AddIncomePage> createState() => _AddIncomePageState();
+  ConsumerState<AddIncomePage> createState() => _AddIncomePageState();
 }
 
-class _AddIncomePageState extends State<AddIncomePage> {
+class _AddIncomePageState extends ConsumerState<AddIncomePage> {
   static const Color kPrimary = Color(0xFF16A34A);
   static const Color kBorder = Color(0x1A000000);
   static const Color kFill = Colors.white;
@@ -25,8 +31,8 @@ class _AddIncomePageState extends State<AddIncomePage> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   bool _isLoading = false;
-  CategoryMode _categoryMode = CategoryMode.auto;
-  int? _autoCategoryIndex; 
+  // CategoryMode _categoryMode = CategoryMode.manual;
+  // int? _autoCategoryIndex; 
   int _selectedCategoryIndex = 0; 
 
   final TextEditingController _amountController = TextEditingController();
@@ -97,6 +103,71 @@ class _AddIncomePageState extends State<AddIncomePage> {
     } catch (e) {
       debugPrint("Error: $e");
       if (mounted) setState(() => _isLoadingCategories = false);
+    }
+  }
+
+  Future<void> _showAddCategoryBottomSheet() async {
+
+    final result = await showCategoryFormBottomSheet(
+      context: context,
+      isIncome: true,
+    );
+
+
+    if (result != null) {
+      final hex = '#${result.color.value.toRadixString(16).padLeft(8, '0').substring(2)}';
+
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+
+      await CategoryService().addNewCategory(
+        token: token,
+        categoryName: result.name,
+        entryType: 'expense',
+        iconName: result.iconName,
+        colorHex: hex,
+      );
+    }
+
+    if (result != null) {
+      final String name = result.name;
+      final Color color = result.color;
+      final String iconName = result.iconName;
+
+      final String hexColor =
+          '#${color.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}';
+
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('token') ?? '';
+
+      final success = await CategoryService().addNewCategory(
+        token: token,
+        categoryName: name,
+        entryType: 'income',
+        iconName: iconName,
+        colorHex: hexColor,
+      );
+
+      if (success && mounted) {
+        await _fetchCategories();
+
+        setState(() {
+          _selectedCategoryIndex = _categories.indexWhere(
+            (c) => c['category_name'] == name,
+          );
+
+          if (_selectedCategoryIndex == -1) {
+            _selectedCategoryIndex = 0;
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('เพิ่มหมวดหมู่สำเร็จ'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
     }
   }
 
@@ -183,15 +254,9 @@ class _AddIncomePageState extends State<AddIncomePage> {
         final amount = double.parse(amountRaw);
         final date = DateFormat('dd/MM/yyyy').parse(_dateController.text);
 
-        String categoryName;
-        if (_categoryMode == CategoryMode.auto) {
-          categoryName = "Auto";
-        } else {
-          if (_categories.isNotEmpty && _selectedCategoryIndex < _categories.length) {
-            categoryName = _categories[_selectedCategoryIndex]['category_name'];
-          } else {
-            categoryName = "Others";
-          }
+        String categoryName = "Others";
+        if (_categories.isNotEmpty && _selectedCategoryIndex < _categories.length) {
+          categoryName = _categories[_categories.indexOf(_categories[_selectedCategoryIndex])]['category_name'];
         }
 
         await ReceiptService().addIncome(
@@ -203,14 +268,16 @@ class _AddIncomePageState extends State<AddIncomePage> {
         );
 
         if (mounted) {
-          TransactionEvent.triggerRefresh();
+          ref.read(transactionControllerProvider).refreshTransactionData();
+          ref.invalidate(userProfileProvider);
+
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('บันทึกยอด $amount บาท เรียบร้อย!'), 
               backgroundColor: Colors.green,
             )
           );
-          Navigator.pop(context);
+          Navigator.pop(context, true);
         }
 
       } catch (e) {
@@ -236,20 +303,34 @@ class _AddIncomePageState extends State<AddIncomePage> {
       onTap: () => FocusScope.of(context).unfocus(),
       child: Scaffold(
         appBar: AppBar(
-          elevation: 0,
-          scrolledUnderElevation: 0,
+          elevation: 8,
+          shadowColor: const Color(0xFF0CC27E).withOpacity(0.3), // เงาสีชมพูอ่อนๆ
           centerTitle: true,
-          foregroundColor: Colors.white,
-          toolbarHeight: 80,
-          title: const Text('Add Income'),
+          toolbarHeight: 75, // เพิ่มความสูงให้ดูโปร่งขึ้น
+          backgroundColor: Colors.transparent,
           flexibleSpace: Container(
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF0CC27E), Color(0xFF24B36B)],
+                colors: [Color(0xFF0CC27E), Color(0xFF24B36B)], // ไล่เฉดสีชมพู
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
             ),
+          ),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
+          ),
+          leading: Padding(
+            padding: const EdgeInsets.only(left: 8.0),
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 20),
+              onPressed: () => Navigator.pop(context),
+            ),
+          ),
+          title: Text(
+            'Add Income',
+            style: GoogleFonts.prompt(fontWeight: FontWeight.w600, fontSize: 22, color: Colors.white),
           ),
         ),
         body: SingleChildScrollView(
@@ -363,96 +444,124 @@ class _AddIncomePageState extends State<AddIncomePage> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text("Category", style: _labelStyle(),),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerRight,
-                            child: SegmentedButton<CategoryMode>(
-                              segments: const [
-                                ButtonSegment(value: CategoryMode.auto, label: Text('Auto'), icon: Icon(Icons.auto_awesome_rounded)),
-                                ButtonSegment(value: CategoryMode.manual, label: Text('Manual'), icon: Icon(Icons.touch_app_rounded)),
-                              ],
-                              selected: {_categoryMode},
-                              onSelectionChanged: (s) {
-                                setState(() {
-                                  _categoryMode = s.first;
-                                });
-                              },
-                              style: ButtonStyle(
-                                side: WidgetStateProperty.all(
-                                  const BorderSide(color: kBorder),
-                                ),
-                                shape: WidgetStateProperty.all(
-                                  RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                                )
-                              )
-                            ),
-                          )
+                          // FittedBox(
+                          //   fit: BoxFit.scaleDown,
+                          //   alignment: Alignment.centerRight,
+                          //   child: SegmentedButton<CategoryMode>(
+                          //     segments: const [
+                          //       ButtonSegment(value: CategoryMode.auto, label: Text('Auto'), icon: Icon(Icons.auto_awesome_rounded)),
+                          //       ButtonSegment(value: CategoryMode.manual, label: Text('Manual'), icon: Icon(Icons.touch_app_rounded)),
+                          //     ],
+                          //     selected: {_categoryMode},
+                          //     onSelectionChanged: (s) {
+                          //       setState(() {
+                          //         _categoryMode = s.first;
+                          //       });
+                          //     },
+                          //     style: ButtonStyle(
+                          //       side: WidgetStateProperty.all(
+                          //         const BorderSide(color: kBorder),
+                          //       ),
+                          //       shape: WidgetStateProperty.all(
+                          //         RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                          //       )
+                          //     )
+                          //   ),
+                          // )
                         ],
                       ),
                       const SizedBox(height: 12,),
                       // ===== Category Grid =====
-                      if (_categoryMode == CategoryMode.auto) ...[
-                        Container(
-                          width: double.infinity,
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.grey.withOpacity(0.5))
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.auto_awesome_rounded),
-                              const SizedBox(width: 10,),
-                              Expanded(
-                                child: Text(
-                                  _autoCategoryIndex == null || _categories.isEmpty
-                                  ? "Auto: Not sure yet (switch to Manual)"
-                                  : "Auto: ${_categories[_autoCategoryIndex!]['category_name']}",
-                                  style: GoogleFonts.prompt(fontWeight: FontWeight.w600),
-                                )
-                              )
-                            ],
-                          ),
-                        )
-                      ] else ...[
-                        if (_isLoadingCategories) ...[
-                          const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(32),
-                              child: CircularProgressIndicator(color: kPrimary),
-                            ),
-                          ),
-                        ] else
-                          GridView.builder(
-                            shrinkWrap: true,
-                            physics: const NeverScrollableScrollPhysics(),
-                            itemCount: _categories.length + 1,
-                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: crossAxisCount,
-                              mainAxisSpacing: 10,
-                              crossAxisSpacing: 10,
-                              childAspectRatio: crossAxisCount  <= 2 ? 2.1 : 0.95,
-                            ),
-                            itemBuilder: (_, i) {
-                              if (i == _categories.length) {
-                                return _AddCategoryCard(onTap: _showAddCategoryDialog, color: kPrimary);
-                              }
+                      // if (_categoryMode != CategoryMode.auto) ...[
+                      //   Container(
+                      //     width: double.infinity,
+                      //     padding: const EdgeInsets.all(12),
+                      //     decoration: BoxDecoration(
+                      //       color: Colors.white,
+                      //       borderRadius: BorderRadius.circular(12),
+                      //       border: Border.all(color: Colors.grey.withOpacity(0.5))
+                      //     ),
+                      //     child: Row(
+                      //       children: [
+                      //         const Icon(Icons.auto_awesome_rounded),
+                      //         const SizedBox(width: 10,),
+                      //         Expanded(
+                      //           child: Text(
+                      //             _autoCategoryIndex == null || _categories.isEmpty
+                      //             ? "Auto: Not sure yet (switch to Manual)"
+                      //             : "Auto: ${_categories[_autoCategoryIndex!]['category_name']}",
+                      //             style: GoogleFonts.prompt(fontWeight: FontWeight.w600),
+                      //           )
+                      //         )
+                      //       ],
+                      //     ),
+                      //   )
+                      // ] else ...[
+                      //   if (_isLoadingCategories) ...[
+                      //     const Center(
+                      //       child: Padding(
+                      //         padding: EdgeInsets.all(32),
+                      //         child: CircularProgressIndicator(color: kPrimary),
+                      //       ),
+                      //     ),
+                      //   ] else
+                      //     GridView.builder(
+                      //       shrinkWrap: true,
+                      //       physics: const NeverScrollableScrollPhysics(),
+                      //       itemCount: _categories.length + 1,
+                      //       gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      //         crossAxisCount: crossAxisCount,
+                      //         mainAxisSpacing: 10,
+                      //         crossAxisSpacing: 10,
+                      //         childAspectRatio: crossAxisCount  <= 2 ? 2.1 : 0.95,
+                      //       ),
+                      //       itemBuilder: (_, i) {
+                      //         if (i == _categories.length) {
+                      //           return _AddCategoryCard(onTap: _showAddCategoryDialog, color: kPrimary);
+                      //         }
 
-                              final c = _categories[i];
-                              final selected = i == _selectedCategoryIndex;
-                              final catName = c['category_name'] ?? 'Unknown';
+                      //         final c = _categories[i];
+                      //         final selected = i == _selectedCategoryIndex;
+                      //         final catName = c['category_name'] ?? 'Unknown';
 
-                              return _CategoryCard(
-                                name: catName,
-                                icon: _parseIcon(c['icon_name'], catName),
-                                color: _parseColor(c['color_hex']),
-                                selected: selected,
-                                onTap: () => setState(() => _selectedCategoryIndex = i),
-                              );
-                            },
+                      //         return _CategoryCard(
+                      //           name: catName,
+                      //           icon: _parseIcon(c['icon_name'], catName),
+                      //           color: _parseColor(c['color_hex']),
+                      //           selected: selected,
+                      //           onTap: () => setState(() => _selectedCategoryIndex = i),
+                      //         );
+                      //       },
+                      //     ),
+                      // ],
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _categories.length + 1,
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: crossAxisCount,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: crossAxisCount  <= 2 ? 2.1 : 0.95,
                           ),
-                      ],
+                          itemBuilder: (_, i) {
+                            if (i == _categories.length) {
+                              return _AddCategoryCard(onTap: _showAddCategoryBottomSheet, color: kPrimary);
+                            }
+
+                            final c = _categories[i];
+                            final selected = i == _selectedCategoryIndex;
+                            final catName = c['category_name'] ?? 'Unknown';
+
+                            return _CategoryCard(
+                              name: catName,
+                              icon: getIconFromKey(c['icon_name'] ?? 'category'),
+                              color: _parseColor(c['color_hex']),
+                              selected: selected,
+                              onTap: () => setState(() => _selectedCategoryIndex = i),
+                            );
+                          },
+                        ),
                       const SizedBox(height: 24,),
                     ]
                   ),

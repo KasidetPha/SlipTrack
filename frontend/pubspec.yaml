@@ -49,6 +49,10 @@ dependencies:
   path_provider: ^2.1.5
   firebase_core: ^4.5.0
   firebase_messaging: ^16.1.2
+  fl_chart: ^1.2.0
+  flutter_riverpod: ^2.5.1
+  firebase_storage: ^13.3.0
+  supabase_flutter: ^2.12.4
   # image_picker: ^1.0.4
 
 dev_dependencies:
