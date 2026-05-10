@@ -38,7 +38,7 @@ async def _get_budget_data(
                 overspending_enabled = bool(setting["overspending_enabled"])
             else:
                 # ค่าเริ่มต้นถ้าผู้ใช้ยังไม่เคยตั้งค่า
-                warning_enabled = False
+                warning_enabled = True
                 warning_percentage = 80
                 overspending_enabled = True
                 

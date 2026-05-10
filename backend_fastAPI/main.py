@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from core.database import init_db_pool, close_db_pool
 
 # นำเข้า Router ทั้งหมดที่เราแยกไว้
-from routers import auth, users, categories, budgets, receipts
+from routers import auth, users, categories, budgets, receipts, dashboard, admin_dashboard, admin_users
 
 # ==========================================
 # Lifespan Events (การจัดการตอนแอปเปิด-ปิด)
@@ -50,6 +50,9 @@ app.include_router(users.router)
 app.include_router(categories.router)
 app.include_router(budgets.router)
 app.include_router(receipts.router)
+app.include_router(dashboard.router)
+app.include_router(admin_dashboard.router)
+app.include_router(admin_users.router)
 
 # ==========================================
 # Root Endpoint (เส้นพื้นฐาน)

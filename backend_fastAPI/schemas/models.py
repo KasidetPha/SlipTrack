@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import Optional, List
 from datetime import datetime, date
 
@@ -39,7 +39,7 @@ class MonthYear(BaseModel):
     """ใช้กำหนดเดือน ปี แบบมีค่า Default เป็นเดือน/ปี ปัจจุบันอัตโนมัติ"""
     month: int = Field(default_factory=lambda: datetime.now(TZ).month, ge=1, le=12)
     year: int = Field(default_factory=lambda: datetime.now(TZ).year)
-
+    entry_type: str | None = "expense"
 
 # ==========================================
 # หมวดหมู่ (Categories)
@@ -48,6 +48,7 @@ class MonthYear(BaseModel):
 class CategorySummaryBody(BaseModel):
     month: int
     year: int
+    entry_type: str = "expense"
 
 class CategoryMasterOut(BaseModel):
     """รูปแบบข้อมูลหมวดหมู่ตอนส่งกลับไปให้หน้าบ้าน"""
@@ -88,15 +89,16 @@ class ReceiptItemOut(BaseModel):
     note: Optional[str] = None
 
 class ReceiptItemInCategoryOut(BaseModel):
-    """ข้อมูลรายการใช้จ่ายที่ถูกจัดกลุ่มในหมวดหมู่แล้ว"""
     item_id: int
     item_name: str
-    quantity: float
+    quantity: int
     total_price: float
     category_id: int
-    tx_date: date
-    icon_name: Optional[str] = None
-    color_hex: Optional[str] = None
+    tx_date: datetime
+    icon_name: str | None = None
+    color_hex: str | None = None
+    entry_type: str
+    note: str | None = None
 
 class UpdateItemBody(BaseModel):
     """ข้อมูลสำหรับอัปเดต/แก้ไขรายการใช้จ่าย"""
@@ -191,6 +193,8 @@ class ReceiptItem(BaseModel):
     date: str
     category_id: Optional[int] = None
     bounding_box: Optional[BoundingBox] = None
+    icon_name: Optional[str] = None
+    color_hex: Optional[str] = None
 
 class ScanResponse(BaseModel):
     """ผลลัพธ์ทั้งหมดที่ตอบกลับหลังจากสแกนใบเสร็จเสร็จสิ้น"""
@@ -214,6 +218,10 @@ class ReceiptBatchCreateRequest(BaseModel):
     receipt_date: date
     total_amount: float
     items: List[ReceiptItemBatchRequest]
+    
+class OCRCorrectionRequest(BaseModel):
+    wrong_text: str
+    correct_text: str
 
 
 # ==========================================
@@ -228,3 +236,38 @@ class NotificationOut(BaseModel):
     notification_type: str
     is_read: bool
     created_at: datetime
+    
+
+# ==========================================
+# user
+# ==========================================
+
+class RegisterBody(BaseModel):
+    fullname: str
+    email: EmailStr
+    password: str
+    gemini_api_key: Optional[str] = None
+
+class UpdateProfileRequest(BaseModel):
+    fullname: str
+    profile_image: Optional[str] = None
+    gemini_api_key: Optional[str] = None
+    
+class UserProfileDetailResponse(BaseModel):
+    id: int
+    fullname: str
+    email: str
+    profile_image: Optional[str] = None
+    has_gemini_api_key: bool
+    masked_gemini_api_key: Optional[str] = None
+    
+    
+# ==========================================
+# ForgotPassword
+# ==========================================
+class ForgotPasswordBody(BaseModel):
+    email: str
+
+class ResetPasswordBody(BaseModel):
+    token: str
+    new_password: str
