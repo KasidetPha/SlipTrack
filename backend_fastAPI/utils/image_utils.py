@@ -47,7 +47,7 @@ def preprocess_receipt_image(image_bytes: bytes, max_size=1536):
         
     # 3. แปลงกลับเป็น bytes เพื่อส่งคืน
     output_io = io.BytesIO()
-    image.save(output_io, format="JPEG", quality=85)
+    image.save(output_io, format="JPEG", quality=95)
     processed_bytes = output_io.getvalue()
     
     return processed_bytes, image.width, image.height
